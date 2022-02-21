@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Risk Models
+{% endblock %}
+
+{% block main %}
+    <body>
+        <h2>Risk Models</h2>
+
+        <p> In addition to the expected returns, mean-variance optimization requires a risk model, some way of quantifying asset risk.
+        The most commonly-used risk model is the covariance matrix, which describes asset volatilities and their co-dependence.
+        This is important because one of the principles of diversification is that risk can be reduced by making many uncorrelated bets
+        (correlation is just normalised covariance).</p>
+
+        <p>In many ways, the subject of risk models is far more important than that of expected returns because historical variance is
+        generally a much more persistent statistic than mean historical returns. In fact, research by Kritzman et al. (2010) [1]
+        suggests that minimum variance portfolios, formed by optimising without providing expected returns, actually perform much better
+        out of sample.</p>
+
+        <P>The problem, however, is that in practice we do not have access to the covariance matrix (in the same way that we don’t have access
+        to expected returns) – the only thing we can do is to make estimates based on past data. The most straightforward approach is to just
+        calculate the sample covariance matrix based on historical returns, but relatively recent (post-2000) research indicates that there
+        are much more robust statistical estimators of the covariance matrix. In addition to providing a wrapper around the estimators in
+        sklearn, PyPortfolioOpt provides some experimental alternatives such as semicovariance and exponentially weighted covariance.</P>
+
+        <div class="alert alert-warning" role="alert">
+            <h5 class="alert-heading">Attention</h5>
+            <P>Estimation of the covariance matrix is a very deep and actively-researched topic that involves statistics, econometrics,
+            and numerical/computational approaches. PyPortfolioOpt implements several options, but there is a lot of room for more
+            sophistication.</p>
+        </div>
+
+
+        <p>The risk_models module provides functions for estimating the covariance matrix given historical returns.</p>
+
+        <P>The format of the data input is the same as that in Expected Returns.</P>
+
+        <p>All of the functions process the price data into percentage returns data, before calculating their respective estimates of expected returns.</p>
+
+        <div class="bottom"></div>
+        <cite>Martin, R. A., (2021). PyPortfolioOpt: portfolio optimization in Python. Journal of Open Source Software, 6(61), 3066, <a href="https://doi.org/10.21105/joss.03066" target="_blank">https://doi.org/10.21105/joss.03066</a></cite>
+    </body>
+{% endblock %}

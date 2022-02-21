@@ -1,0 +1,20 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    History
+{% endblock %}
+
+{% block main %}
+<form action="/history" method="post">
+  <h3>Please enter the time range to pull history from</h3>
+        <div class="form-group">
+            <input autocomplete="off" value="{{ edate }}" name="start" placeholder="start" type="date">
+            <input autocomplete="off" value="{{ ldate }}" name="end" placeholder="end" type="date">
+            <button onClick="this.form.submit(); this.disabled=true; this.value='Sending…'; " class="btn btn-primary" type="submit">Submit</button>
+        </div>
+</form>
+<script>
+  document.querySelector("#today").valueAsDate = new Date();
+  document.getElementById('textboxid').style.height="200px";
+</script>
+{% endblock %}

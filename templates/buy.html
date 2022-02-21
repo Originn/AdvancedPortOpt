@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Quote
+{% endblock %}
+
+{% block main %}
+    <form action="/buy" method="post">
+        <div class="form-group">
+            <input autocomplete="off" autofocus class="form-control" name="symbol" placeholder="symbol" type="text">
+        </div>
+        <div class="form-group">
+            <input autocomplete="off" autofocus class="form-control" name="shares" placeholder="Number of shares" type="text">
+        </div>
+        <button onClick="this.form.submit(); this.disabled=true; this.value='Sending…'; " class="btn btn-primary" type="submit">Buy</button>
+    </form
+{% endblock %}

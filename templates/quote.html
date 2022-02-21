@@ -1,0 +1,13 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Quote
+{% endblock %}
+
+{% block main %}
+    <form action="/quote" method="post">
+        <div class="form-group">
+            <input autocomplete="off" autofocus class="form-control" name="symbol" placeholder="symbol" type="text">
+        </div>
+        <button onClick="this.form.submit(); this.disabled=true; this.value='Sending…'; " class="btn btn-primary" type="submit">Quote</button>
+{% endblock %}

@@ -1,0 +1,70 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Build
+{% endblock %}
+
+{% block main %}
+<form action="/build" method="post">
+<h3> Enter a list of stock symbols seperated by a new row</h3>
+<p>(note that GBP stocks are converted to USD, currently only US and UK stocks are compatible with conversion. The current rate is ${{ GBP }} to £1)</p>
+        <div class="form-group">
+            <textarea autofocus class="form-control" name="symbols" placeholder="symbols" type="text"></textarea>
+        </div>
+<h3>Please enter the time range to pull data from</h3>
+        <div class="form-group">
+            <input autocomplete="off" value="2015-01-01" autofocus class="form-control" name="start" placeholder="start" type="date">
+            <input autocomplete="off" id="today" autofocus class="form-control" name="end" placeholder="end" type="date">
+        </div>
+
+<h3>Please enter the amount to be invested</h3>
+        <div class="form-group">
+            <input autocomplete="off" value={{ availableCash }} autofocus class="form-control" name="funds" placeholder="amount" type="number" min="1">
+        </div>
+
+
+<h3>Please enter your upper bounds volatility constraint</h3>
+        <div class="form-group">
+            <input autocomplete="off" value="25" autofocus class="form-control" name="volatility" placeholder="volatility" type="number" min="0">%
+        </div>
+
+<h3>Please enter your gamma</h3>
+<p>Gamma is the tuning parameter. Larger gamma pulls portfolio weights towards an equal allocation. Gamma range is between 0 and 1</p>
+        <div class="form-group">
+            <input autocomplete="off" value="0.1" autofocus class="form-control" name="gamma" placeholder="gamma" type="number" step=".1" min="0" max="1">
+        </div>
+
+<h3> Please enter target annual rate of return</h3>
+        <div class="form-group">
+            <input autocomplete="off" value="10" autofocus class="form-control" name="return" placeholder="rate of return" type="number" min="1">%
+        </div>
+        <button onClick="this.form.submit(); this.disabled=true; this.value='Sending…'; " class="btn btn-primary" type="submit">Build</button>
+</form>
+<script>
+    document.querySelector("#today").valueAsDate = new Date();
+    document.getElementById('textboxid').style.height="200px";
+
+    const tx = document.getElementsByTagName("textarea");
+    for (let i = 0; i < tx.length; i++) {
+        tx[i].setAttribute("style", "height:" + (tx[i].scrollHeight) + "px;overflow-y:hidden;");
+        tx[i].addEventListener("input", OnInput, false);
+    }
+
+    function OnInput() {
+        this.style.height = "auto";
+        this.style.height = (this.scrollHeight) + "px";
+    }
+</script>
+<script>
+    $("textarea").each(function () {
+        this.setAttribute("style", "height:" + (this.scrollHeight) + "px;overflow-y:hidden;");
+
+    }).on("input", function () {
+        this.style.height = "auto";
+        this.style.height = (this.scrollHeight) + "px";
+    });
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+{% endblock %}
+

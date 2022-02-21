@@ -1,0 +1,38 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Register
+{% endblock %}
+
+{% block main %}
+    <body>
+        <h2>Expected Returns</h2>
+
+        <p> Mean-variance optimization requires knowledge of the expected returns. In practice, these are rather difficult to know with any certainty.
+        Thus the best we can do is to come up with estimates, for example by extrapolating historical data. This is the main flaw in mean-variance optimization – the
+        optimization procedure is sound, and provides strong mathematical guarantees, given the correct inputs.</p>
+
+        <div class="alert alert-warning" role="alert">
+            <h5 class="alert-heading">Caution</h5>
+            <P>Supplying expected returns can do more harm than good. If predicting stock returns were as easy as calculating the mean historical return, we’d all be rich!
+            For most use-cases, I would suggest that you focus your efforts on choosing an appropriate risk model (see Risk Models).</p>
+        </div>
+
+
+        <p>The expected_returns module provides functions for estimating the expected returns of the assets, which is a required input in mean-variance optimization.</p>
+
+        <p>By convention, the output of these methods is expected annual returns. It is assumed that daily prices are provided, though in reality the functions are agnostic
+        to the time period (just change the frequency parameter). Asset prices must be given as a pandas dataframe, as per the format described in the User Guide.</p>
+
+        <p>All of the functions process the price data into percentage returns data, before calculating their respective estimates of expected returns.</p>
+
+        <p>Currently implemented:</p>
+
+        <li>general return model function, allowing you to run any return model from one function.</li>
+        <li>mean historical return</li>
+        <li>exponentially weighted mean historical return</li>
+        <li>CAPM estimate of returns</li>
+        <div class="bottom"></div>
+        <cite>Martin, R. A., (2021). PyPortfolioOpt: portfolio optimization in Python. Journal of Open Source Software, 6(61), 3066, <a href="https://doi.org/10.21105/joss.03066" target="_blank">https://doi.org/10.21105/joss.03066</a></cite>
+    </body>
+{% endblock %}

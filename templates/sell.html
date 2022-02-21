@@ -1,0 +1,39 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Log In
+{% endblock %}
+
+{% block main %}
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+<script>
+    function goPython() {
+        $.ajax({
+            url: "/sell_all",
+            context: document.body
+    });
+    }
+    function myFunction() {
+        document.getElementById("btn1").disabled = true;
+    }   
+</script>
+    <form action="/sell" method="post">
+        <div>
+            <label for="symbol">Choose a symbol:</label>
+                <select name="symbol">
+                    {% for stock in stocks %}
+                        <option>{{ stock["symbol"] }}</option>
+                    {% endfor %}
+        </div>
+        <div class="form-group">
+            <input style="margin:10px;" autocomplete="off" autofocus class="form-control" name="shares" placeholder="Number of shares to sell" type="integer">
+        </div>
+            <button style="margin:5px;" onClick="this.form.submit(); this.disabled=true; this.value='Sending…';" class="btn btn-primary" id="btn1" type="submit">Sell</button>
+    </form>
+    
+    <form action="/sell_all" method="post">
+        <button style="margin:5px;" onClick="this.form.submit(); this.disabled=true; this.value='Sending…'; myFunction();" class="btn btn-primary">Sell All</button>
+    </form>
+
+
+{% endblock %}
