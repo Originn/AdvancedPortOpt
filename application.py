@@ -1,5 +1,8 @@
 import os
 
+import time
+from sqlalchemy import create_engine
+from sqlalchemy.orm import scoped_session, sessionmaker
 import plotly.graph_objects as go
 import plotly
 import plotly.express as px
@@ -27,6 +30,8 @@ from pypfopt import EfficientFrontier
 import io
 from helpers import login_required, lookup, usd, gbp, GBPtoUSD, contains_multiple_words
 import json
+
+engine = create_engine('postgresql://fguklxopatjytr:8f3a549e76b4828b99d91d29232a8e5f889981a061d92fd2a4c68390bcc6a4db@ec2-3-228-222-169.compute-1.amazonaws.com:5432/d70psf828vkthi')
 
 dicts={}
 pd.set_option('display.precision', 7)
@@ -56,7 +61,8 @@ app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
 # Configure CS50 Library to use SQLite database
-db = SQL("sqlite:///project.db")
+#db = SQL("sqlite:///project.db")
+db=scoped_session(sessionmaker(bind=engine))
 
 
 @app.route("/")
@@ -64,9 +70,14 @@ db = SQL("sqlite:///project.db")
 def index():
     """Show portfolio of stocks"""
     #quering for the symbol and the corresponding sum of the same stock and the average price paid for the stock
-    stocks = db.execute("SELECT symbol, SUM(number_of_shares) as sumshares, AVG(price) as avgprice, AVG(purchase_p) as purchase_p FROM 'transaction' WHERE user_id = :i_d GROUP BY symbol", i_d=session["user_id"])
-    #quering the cash at hand for the user in session
-    cash = db.execute("SELECT cash FROM users WHERE id = ?", session["user_id"])[0]["cash"]
+    stocks = db.execute("SELECT symbol, SUM(number_of_shares) as sumshares, AVG(price) as avgprice, AVG(purchase_p) as purchase_p FROM records WHERE user_id = :i_d GROUP BY symbol", {"i_d": session["user_id"]}).all()
+    if stocks is None:
+        stocks = []
+    else:
+        stocks = [{'symbol': a, 'sumshares': b, 'avgprice': c, 'purchase_p': d} for a, b, c, d in stocks]
+    cash = db.execute("SELECT cash FROM users WHERE id = :id", {"id": session["user_id"]}).all()
+    cash = ([i[0] for i in cash][0])
+    
     totalPortValue = 0
     totalprolos = 0
 
@@ -87,9 +98,8 @@ def index():
         stock['prolos'] = (stock['perc_change']/100)*stock['total']
         totalprolos += stock['prolos']
         totalPortValue += stock['sumshares'] * price
-
-
-    availableCash=cash
+    
+    availableCash = cash
     grandTotal = availableCash + totalPortValue
 
     return render_template("/index.html",availableCash=round(availableCash, 4), stocks=stocks, totalPortValue=totalPortValue, grandTotal=grandTotal, totalprolos=totalprolos)
@@ -116,7 +126,8 @@ def buy():
         else:
             data = lookup(request.form.get("symbol"))
             symbol=data['symbol']
-            availableCash=db.execute("SELECT cash FROM users WHERE id = :user_id",  user_id = session["user_id"])[0]["cash"]
+            availableCash=db.execute("SELECT cash FROM users WHERE id = :user_id", {'user_id':session["user_id"]})
+            availableCash=[item[0] for item in availableCash][0]
 
             price=data["regularMarketPrice"]
             if ".L" in symbol:
@@ -129,10 +140,11 @@ def buy():
                 now = datetime.datetime.now()
                 formatted_date = now.strftime('%Y-%m-%d %H:%M:%S')
                 #insert new row in the database to record the purchase
-                db.execute("INSERT INTO history (user_id, symbol, price, number_of_shares, time, status) VALUES(:user_id, :symbol, :price, :number_of_shares, :time, :status)",
-                            user_id=session["user_id"], symbol=symbol, price=price, number_of_shares=request.form.get("shares"), time=formatted_date, status='purchase')
-                db.execute("INSERT INTO 'transaction' (user_id, symbol, price, number_of_shares, execution_time, transaction_type, purchase_p) VALUES(:user_id, :symbol, :price, :number_of_shares, :execution_time, :transaction_type, :purchase_p)",user_id=session["user_id"], symbol=symbol, price=price, number_of_shares=request.form.get("shares"), execution_time=formatted_date, transaction_type="purchase", purchase_p=price)
-                db.execute("UPDATE users SET cash = :cash WHERE id = :user_id", cash = availableCash-sharesPrice, user_id=session["user_id"])
+                db.execute("INSERT INTO history (user_id, symbol, price, number_of_shares, time, status) VALUES(:user_id, :symbol, :price, :number_of_shares, :time, :status)",{
+                            'user_id':session["user_id"], 'symbol':symbol, 'price':price, 'number_of_shares':request.form.get("shares"), 'time':formatted_date, 'status':'purchase'})
+                db.execute("INSERT INTO records (user_id, symbol, price, number_of_shares, execution_time, transaction_type, purchase_p) VALUES(:user_id, :symbol, :price, :number_of_shares, :execution_time, :transaction_type, :purchase_p)",{'user_id':session["user_id"], 'symbol':symbol, 'price':price, 'number_of_shares':request.form.get("shares"), 'execution_time':formatted_date, 'transaction_type':"purchase", 'purchase_p':price})
+                db.execute("UPDATE users SET cash = :cash WHERE id = :user_id",{'cash':availableCash-sharesPrice, 'user_id':session["user_id"]})
+                db.commit()
                 return redirect("/")
     else:
         return render_template("buy.html")
@@ -143,9 +155,11 @@ def buy():
 def history():
     """Show history of transactions"""
     if request.method == "POST":
-        hist = db.execute("SELECT * FROM history WHERE DATE(time) BETWEEN :start AND :end AND user_id = :i_d ORDER BY time DESC", start=str(request.form.get("start")), end=str(request.form.get("end")), i_d=session["user_id"])
+        hist = db.execute("SELECT * FROM history WHERE DATE(time) BETWEEN :start AND :end AND user_id = :i_d ORDER BY time DESC", {'start':str(request.form.get("start")), 'end':str(request.form.get("end")), 'i_d':session["user_id"]}).all()
         if hist == []:
            return render_template("history.html")
+        else:
+            hist=[{'status': a, 'symbol': b, 'price': c, 'number_of_shares': d, 'time': e, 'user_id': f} for a, b, c, d, e, f in hist]
         status = hist[0]["status"]
         symbol = hist[0]["symbol"]
         price = hist[0]["price"]
@@ -154,9 +168,11 @@ def history():
         return render_template("history1.html", hist=hist)
     else:
         #get the earlist date of the history records
-        edate=db.execute("SELECT DATE(time) FROM history WHERE user_id = :i_d ORDER BY time ASC", i_d=session["user_id"])[0]['DATE(time)']
+        edate=db.execute("SELECT DATE(time) FROM history WHERE user_id = :i_d ORDER BY time ASC", {'i_d':session["user_id"]})
+        edate=[item[0] for item in edate][0]
         #get the last date of the history records
-        ldate=db.execute("SELECT DATE(time) FROM history WHERE user_id = :i_d ORDER BY time DESC", i_d=session["user_id"])[0]['DATE(time)']
+        ldate=db.execute("SELECT DATE(time) FROM history WHERE user_id = :i_d ORDER BY time DESC", {'i_d':session["user_id"]})
+        ldate=[item[0] for item in ldate][0]
         return render_template("history.html", edate=edate, ldate=ldate)
 
 @app.route("/login", methods=["GET", "POST"])
@@ -178,15 +194,19 @@ def login():
             return redirect("/login")
 
         # Query database for username
-        rows = db.execute("SELECT * FROM users WHERE username = ?", request.form.get("username"))
-
+        rows = db.execute("SELECT * FROM users WHERE username = :username", {"username": request.form.get("username")})
+        try:
+            rows = [i for i in rows][0]
+        except IndexError:
+            flash("invalid username and/or password")
+            return redirect("/login")
         # Ensure username exists and password is correct
-        if len(rows) != 1 or not check_password_hash(rows[0]["hash"], request.form.get("password")):
+        if not check_password_hash(rows[1], request.form.get("password")):
             flash("invalid username and/or password")
             return redirect("/login")
 
         # Remember which user has logged in
-        session["user_id"] = rows[0]["id"]
+        session["user_id"] = rows[3]
 
         # Redirect user to home page
         return redirect("/")
@@ -246,17 +266,19 @@ def register():
     """Register user"""
 
     if request.method == "POST":
-
+    
         name = request.form.get("username")
         if not name:
             flash("Missing name")
             return redirect("/register")
-        findName=db.execute("SELECT username FROM users WHERE username = :n", n = request.form.get("username"))
-        if not findName:
+        findName=db.execute("SELECT username FROM users WHERE username = :name", {'name' : request.form.get("username")}).all()
+        try:
+            findName=[i[0] for i in findName][0]
+            if name == findName:
+                flash("User name already taken")
+                return redirect("/register")
+        except:
             pass
-        elif name == findName[0]["username"]:
-            flash("User name already taken")
-            return redirect("/register")
 
 
         password = request.form.get("password")
@@ -280,10 +302,15 @@ def register():
 
         if password == confirmation:
             password = generate_password_hash(password)
-            db.execute("INSERT INTO users (username, hash) VALUES(?, ?)", name, password)
+            db.execute("INSERT INTO users (username, hash) VALUES (:n, :u)", {'n': str(name), 'u': str(password)})
+            db.commit()
             #Store user id in db
-            rows = db.execute("SELECT * FROM users WHERE username = :username", username = request.form.get("username"))
-            session["user_id"] = rows[0]["id"]
+            rows = db.execute("SELECT * FROM users WHERE username = :username", {"username": request.form.get("username")}).all()
+            session["user_id"] = [i[3] for i in rows][0]
+            engine.table_names()
+            db.execute("INSERT INTO records (user_id) VALUES (:user_id)", {'user_id': int(session["user_id" ])})
+            db.commit()
+            time.sleep(7)
             return redirect("/")
 
     else:
@@ -296,14 +323,16 @@ def sell():
     """Sell shares of stock"""
     if request.method == "POST":
         symbolToSell=request.form.get("symbol")
-        NumOfShares = db.execute("SELECT symbol, SUM(number_of_shares) as sumshare FROM 'transaction' WHERE symbol = :symbolToSell AND user_id = :user_id AND transaction_type = :ty", symbolToSell=request.form.get("symbol"), user_id=session["user_id"], ty='purchase')
+        NumOfShares = db.execute("SELECT symbol, SUM(number_of_shares) as sumshare FROM records WHERE symbol = :symbolToSell AND user_id = :user_id AND transaction_type = :ty GROUP BY symbol", {'symbolToSell':str(request.form.get("symbol")), 'user_id':session["user_id"], 'ty':'purchase'})
+        NumOfShares=[{'symbol': a, 'sumshare': b} for a, b in NumOfShares]
         NumOfshareToSell = int(request.form.get("shares"))
         if NumOfshareToSell > int(NumOfShares[0]["sumshare"]):
             flash("You don't have enough stocks")
             return redirect("/sell")
         else:
-            cash = db.execute("SELECT cash FROM users WHERE id = ?", session["user_id"])[0]["cash"]
-            price = float(lookup(request.form.get("symbol")).iloc[0]['currentPrice'])
+            cash = db.execute("SELECT cash FROM users WHERE id = :id", {'id':session["user_id"]})
+            cash=[item[0] for item in cash][0]
+            price = float(lookup(request.form.get("symbol"))['regularMarketPrice'])
             if ".L" in symbolToSell:
                 price=GBPtoUSD()*price
             moneyBack = NumOfshareToSell*price
@@ -312,13 +341,19 @@ def sell():
             formatted_date = now.strftime('%Y-%m-%d %H:%M:%S')
             #entering the sale into transaction table
             negative= (int(request.form.get("shares"))) * (-1)
-            db.execute("INSERT INTO history (user_id, symbol, price, number_of_shares, time, status) VALUES(:user_id, :symbol, :price, :number_of_shares, :time, :status)",user_id=session["user_id"], symbol=request.form.get("symbol"), price=price, number_of_shares=request.form.get("shares"), time=formatted_date, status='sold')
-            db.execute("INSERT INTO 'transaction' (user_id, symbol, price, number_of_shares, execution_time, transaction_type) VALUES(:user_id, :symbol, :price, :number_of_shares, :execution_time, :transaction_type)",user_id=session["user_id"], symbol=request.form.get("symbol"), price=price, number_of_shares=negative, execution_time=formatted_date, transaction_type='sold')
-            db.execute("UPDATE users SET cash = :cash WHERE id = :user_id", cash=cash+moneyBack, user_id=session["user_id"])
+            db.execute("INSERT INTO history (user_id, symbol, price, number_of_shares, time, status) VALUES(:user_id, :symbol, :price, :number_of_shares, :time, :status)",{'user_id':session["user_id"], 'symbol':request.form.get("symbol"), 'price':price, 'number_of_shares':request.form.get("shares"), 'time':formatted_date, 'status':'sold'})
+            #db.execute("INSERT INTO records (user_id, symbol, price, number_of_shares, execution_time, transaction_type) VALUES(:user_id, :symbol, :price, :number_of_shares, :execution_time, :transaction_type)",{'user_id':session["user_id"], 'symbol':request.form.get("symbol"), 'price':price, 'number_of_shares':negative, 'execution_time':formatted_date, 'transaction_type':'sold'})
+            db.execute("UPDATE users SET cash = :cash WHERE id = :user_id", {'cash':cash+moneyBack, 'user_id':session["user_id"]})
+            if NumOfshareToSell == int(NumOfShares[0]["sumshare"]):
+                db.execute("DELETE FROM records WHERE user_id =:ui AND symbol=:symbol", {'ui':session["user_id"], 'symbol':request.form.get("symbol")})
+            else:
+                db.execute("UPDATE records SET number_of_shares =:n WHERE user_id =:ui AND symbol= :symbol", {'ui':session["user_id"], 'symbol':request.form.get("symbol"), 'n':int(NumOfShares[0]["sumshare"])-int(request.form.get("shares"))})
+            db.commit()
             return redirect("/")
     else:
         stocks = db.execute(
-            "SELECT symbol, SUM(number_of_shares) as sumshare FROM 'transaction' WHERE user_id = ? GROUP BY symbol", session["user_id"])
+            "SELECT symbol, SUM(number_of_shares) as sumshare FROM records WHERE user_id = :user_id GROUP BY symbol", {'user_id':session["user_id"]}).all()
+        stocks=[{'symbol': a, 'sumshare': b} for a, b in stocks]
         return render_template("/sell.html", stocks=stocks)
 
 @app.route("/about")
@@ -342,7 +377,8 @@ def build():
         if contains_multiple_words(symbols) == False:
             flash("The app purpose is to optimize a portfolio given a list of stocks. Please enter a list of stocks seperated by a new row.")
             return redirect("/build")
-        db.execute("INSERT INTO build (user_id, stocks, date_start, date_end, amount, shortperc, volatility, gamma, target_return) VALUES(:user_id, :stocks, :date_start, :date_end, :amount, :shortperc, :volatility, :gamma, :target_return)",user_id=session["user_id"], stocks=symbols.upper(), date_start=request.form.get("start"), date_end=request.form.get("end"), amount=request.form.get("funds"), shortperc=request.form.get("short"), volatility=request.form.get("volatility"), gamma=request.form.get("gamma"), target_return=request.form.get("return"))
+        db.execute("INSERT INTO build (user_id, stocks, date_start, date_end, amount, shortperc, volatility, gamma, target_return) VALUES(:user_id, :stocks, :date_start, :date_end, :amount, :shortperc, :volatility, :gamma, :target_return)",{'user_id':session["user_id"], 'stocks':symbols.upper(), 'date_start':request.form.get("start"), 'date_end':request.form.get("end"), 'amount':request.form.get("funds"), 'shortperc':request.form.get("short"), 'volatility':request.form.get("volatility"), 'gamma':request.form.get("gamma"), 'target_return':request.form.get("return")})
+        db.commit()
         try:
             df = yf.download(symbols, start=request.form.get("start"), end=request.form.get("end"), threads=False)["Adj Close"].dropna(axis=1, how='all')
             df = df.replace(0, np.nan)
@@ -352,8 +388,7 @@ def build():
                 flash("Please enter valid stocks from Yahoo Finance.")
                 return redirect("/build")
             df = df.loc[:,df.iloc[-2,:].notna()]
-            #return render_template('df.html',  tables=[df.to_html(classes='data')], titles=df.columns.values)
-            df.to_csv("stocks.csv")
+
 
         except ValueError:
             flash("Please enter a valid symbols (taken from Yahoo Finance)")
@@ -452,7 +487,6 @@ def build():
             for col in df.columns:
                 if col.endswith(".L"):
                     df.loc[:,col] = df.loc[:,col]*GBPtoUSD()
-            #df.to_csv('stocks.csv')
             try:
                 latest_prices = df.iloc[-1]
             except IndexError:
@@ -473,7 +507,6 @@ def build():
                 flash("Can't get latest prices for the following stock/s, please remove to contiue : %s" % delisted)
                 return redirect("/build")
             alloc, leftover = da.lp_portfolio()
-            print(leftover)
             session['alloc']=alloc
             session['latest_prices']=latest_prices
         except ValueError:
@@ -510,7 +543,6 @@ def build():
             return redirect("/build")
         da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
         alloc1, leftover1 = da.lp_portfolio()
-        print(leftover1)
         session['alloc1']=alloc1
         session['latest_prices1']=latest_prices1
 
@@ -536,12 +568,13 @@ def build():
             return redirect("/build")
         da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
         alloc2, leftover2 = da.lp_portfolio()
-        print(leftover2)
         session['alloc2']=alloc2
         session['latest_prices2']=latest_prices2
         return render_template ("built.html",av=av, leftover=leftover, alloc=alloc, ret=float(request.form.get("return")),gamma=request.form.get("gamma"),volatility=request.form.get("volatility"),perf=perf, perf2=perf2, alloc1=alloc1, alloc2=alloc2, plot_json=plot_json, plot_json1=plot_json1, plot_json2=plot_json2, plot_json3=plot_json3, plot_json4=plot_json4, plot_json5=plot_json5, leftover1=leftover1, leftover2=leftover2,listofna=(', '.join(listofna)))
     else:
-        availableCash=db.execute("SELECT cash FROM users WHERE id = :user_id", user_id = session["user_id"])[0]["cash"]
+        availableCash=db.execute("SELECT cash FROM users WHERE id = :id", {"id": session["user_id"]}).all()
+        availableCash=[i[0] for i in availableCash][0]
+
         return render_template("build.html", availableCash=round(availableCash, 4), GBP=GBPtoUSD())
 
 @app.route("/allocation", methods=["GET", "POST"])
@@ -554,7 +587,8 @@ def allocation():
     for key, value in alloc.items():
         price=latest_prices[key]
         amount=value
-        availableCash=db.execute("SELECT cash FROM users WHERE id = :user_id", user_id = session["user_id"])[0]["cash"]
+        availableCash=db.execute("SELECT cash FROM users WHERE id = :user_id", {'user_id': session["user_id"]})
+        availableCash=[item[0] for item in availableCash][0]
         sharesPrice = price * amount
         if sharesPrice > availableCash:
             flash("Not enough money to buy:", str(key))
@@ -567,9 +601,10 @@ def allocation():
             formatted_date = now.strftime('%Y-%m-%d %H:%M:%S')
             #insert new row in the database to record the purchase
             db.execute("INSERT INTO history (user_id, symbol, price, number_of_shares, time, status) VALUES(:user_id, :symbol, :price, :number_of_shares, :time, :status)",
-            user_id=session["user_id"], symbol=key, price=price, number_of_shares=int(amount), time=formatted_date, status='purchase')
-            db.execute("INSERT INTO 'transaction' (user_id, symbol, price, number_of_shares, execution_time, transaction_type, purchase_p) VALUES(:user_id, :symbol, :price, :number_of_shares, :execution_time, :transaction_type, :purchase_p)",user_id=session["user_id"], symbol=key, price=price, number_of_shares=int(amount), execution_time=formatted_date, transaction_type="purchase", purchase_p=price)
-            db.execute("UPDATE users SET cash = :cash WHERE id = :user_id", cash = availableCash-(amount*price), user_id=session["user_id"])
+            {'user_id':session["user_id"], 'symbol':key, 'price':price, 'number_of_shares':int(amount), 'time':formatted_date, 'status':'purchase'})
+            db.execute("INSERT INTO records (user_id, symbol, price, number_of_shares, execution_time, transaction_type, purchase_p) VALUES(:user_id, :symbol, :price, :number_of_shares, :execution_time, :transaction_type, :purchase_p)",{'user_id':session["user_id"], 'symbol':key, 'price':price, 'number_of_shares':int(amount), 'execution_time':formatted_date, 'transaction_type':"purchase", 'purchase_p':price})
+            db.execute("UPDATE users SET cash = :cash WHERE id = :user_id", {'cash': availableCash-(amount*price), 'user_id':session["user_id"]})
+            db.commit()
 
     return redirect("/")
 
@@ -584,9 +619,9 @@ def allocation1():
     for key, value in alloc1.items():
         price=latest_prices1[key]
         amount=value
-        availableCash=db.execute("SELECT cash FROM users WHERE id = :user_id", user_id = session["user_id"])[0]["cash"]
+        availableCash=db.execute("SELECT cash FROM users WHERE id = :user_id", {'user_id':session["user_id"]})
+        availableCash=[item[0] for item in availableCash][0]
         sharesPrice = price * amount
-        print(sharesPrice)
         if sharesPrice > availableCash:
             flash("Not enough money to buy:", str(key))
             return redirect ("/built")
@@ -598,9 +633,10 @@ def allocation1():
             formatted_date = now.strftime('%Y-%m-%d %H:%M:%S')
             #insert new row in the database to record the purchase
             db.execute("INSERT INTO history (user_id, symbol, price, number_of_shares, time, status) VALUES(:user_id, :symbol, :price, :number_of_shares, :time, :status)",
-            user_id=session["user_id"], symbol=key, price=price, number_of_shares=int(amount), time=formatted_date, status='purchase')
-            db.execute("INSERT INTO 'transaction' (user_id, symbol, price, number_of_shares, execution_time, transaction_type, purchase_p) VALUES(:user_id, :symbol, :price, :number_of_shares, :execution_time, :transaction_type, :purchase_p)",user_id=session["user_id"], symbol=key, price=price, number_of_shares=int(amount), execution_time=formatted_date, transaction_type="purchase", purchase_p=price)
-            db.execute("UPDATE users SET cash = :cash WHERE id = :user_id", cash = availableCash-(amount*price), user_id=session["user_id"])
+            {'user_id':session["user_id"], 'symbol':key, 'price':price, 'number_of_shares':int(amount), 'time':formatted_date, 'status':'purchase'})
+            db.execute("INSERT INTO records (user_id, symbol, price, number_of_shares, execution_time, transaction_type, purchase_p) VALUES(:user_id, :symbol, :price, :number_of_shares, :execution_time, :transaction_type, :purchase_p)",{'user_id':session["user_id"], 'symbol':key, 'price':price, 'number_of_shares':int(amount), 'execution_time':formatted_date, 'transaction_type':"purchase", 'purchase_p':price})
+            db.execute("UPDATE users SET cash = :cash WHERE id = :user_id", {'cash': availableCash-(amount*price), 'user_id':session["user_id"]})
+            db.commit()
 
     return redirect("/")
 
@@ -614,7 +650,8 @@ def allocation2():
     for key, value in alloc2.items():
         price=latest_prices2[key]
         amount=value
-        availableCash=db.execute("SELECT cash FROM users WHERE id = :user_id", user_id = session["user_id"])[0]["cash"]
+        availableCash=db.execute("SELECT cash FROM users WHERE id = :user_id", {'user_id':session["user_id"]})
+        availableCash=[item[0] for item in availableCash][0]
         sharesPrice = price * amount
         if sharesPrice > availableCash:
             flash("Not enough money to buy:", str(key))
@@ -627,21 +664,24 @@ def allocation2():
             formatted_date = now.strftime('%Y-%m-%d %H:%M:%S')
             #insert new row in the database to record the purchase
             db.execute("INSERT INTO history (user_id, symbol, price, number_of_shares, time, status) VALUES(:user_id, :symbol, :price, :number_of_shares, :time, :status)",
-            user_id=session["user_id"], symbol=key, price=price, number_of_shares=int(amount), time=formatted_date, status='purchase')
-            db.execute("INSERT INTO 'transaction' (user_id, symbol, price, number_of_shares, execution_time, transaction_type, purchase_p) VALUES(:user_id, :symbol, :price, :number_of_shares, :execution_time, :transaction_type, :purchase_p)",user_id=session["user_id"], symbol=key, price=price, number_of_shares=int(amount), execution_time=formatted_date, transaction_type="purchase", purchase_p=price)
-            db.execute("UPDATE users SET cash = :cash WHERE id = :user_id", cash = availableCash-(amount*price), user_id=session["user_id"])
+            {'user_id':session["user_id"], 'symbol':key, 'price':price, 'number_of_shares':int(amount), 'time':formatted_date, 'status':'purchase'})
+            db.execute("INSERT INTO records (user_id, symbol, price, number_of_shares, execution_time, transaction_type, purchase_p) VALUES(:user_id, :symbol, :price, :number_of_shares, :execution_time, :transaction_type, :purchase_p)",{'user_id':session["user_id"], 'symbol':key, 'price':price, 'number_of_shares':int(amount), 'execution_time':formatted_date, 'transaction_type':"purchase", 'purchase_p':price})
+            db.execute("UPDATE users SET cash = :cash WHERE id = :user_id", {'cash': availableCash-(amount*price), 'user_id':session["user_id"]})
+            db.commit()
 
     return redirect("/")
 
 @app.route("/sell_all", methods=["GET", "POST"])
 @login_required
 def sell_all():
-    numberofShares=db.execute("SELECT symbol, number_of_shares FROM 'transaction' WHERE user_id= :uid", uid=session["user_id"])
+    numberofShares=db.execute("SELECT symbol, number_of_shares FROM records WHERE user_id= :uid", {'uid':session["user_id"]})
+    numberofShares=[{'symbol': a, 'number_of_shares': b} for a, b in numberofShares]
     for stock in numberofShares:
         symbol=stock["symbol"]
         data=lookup(symbol)
         NumOfshareToSell=stock["number_of_shares"]
-        cash = db.execute("SELECT cash FROM users WHERE id = ?", session["user_id"])[0]["cash"]
+        cash = db.execute("SELECT cash FROM users WHERE id = :id", {'id':session["user_id"]})
+        cash=[item[0] for item in cash][0]
         price = data["regularMarketPrice"]
         if ".L" in symbol:
             price=GBPtoUSD()*price
@@ -651,10 +691,10 @@ def sell_all():
         formatted_date = now.strftime('%Y-%m-%d %H:%M:%S')
         #entering the sale into transaction table
         negative= (int(NumOfshareToSell)) * (-1)
-        db.execute("INSERT INTO history (user_id, symbol, price, number_of_shares, time, status) VALUES(:user_id, :symbol, :price, :number_of_shares, :time, :status)",user_id=session["user_id"], symbol=symbol, price=price, number_of_shares=NumOfshareToSell, time=formatted_date, status='sold')
-        db.execute("UPDATE users SET cash = :cash WHERE id = :user_id", cash=cash+moneyBack, user_id=session["user_id"])
-
-    db.execute("DELETE FROM 'transaction' WHERE user_id =:ui", ui=session["user_id"])
+        db.execute("INSERT INTO history (user_id, symbol, price, number_of_shares, time, status) VALUES(:user_id, :symbol, :price, :number_of_shares, :time, :status)",{'user_id':session["user_id"], 'symbol':symbol, 'price':price, 'number_of_shares':NumOfshareToSell, 'time':formatted_date, 'status':'sold'})
+        db.execute("UPDATE users SET cash = :cash WHERE id = :user_id", {'cash':cash+moneyBack, 'user_id':session["user_id"]})
+    db.execute("DELETE FROM records WHERE user_id =:ui", {'ui':session["user_id"]})
+    db.commit()
     return redirect("/")
 
 
