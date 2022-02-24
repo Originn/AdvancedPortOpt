@@ -27,18 +27,16 @@ from helpers import login_required, lookup, usd, gbp, GBPtoUSD, contains_multipl
 import json
 #from waitress import serve
 
-engine = create_engine(os.getenv("DATABASE_URL"))
-
 dicts={}
 pd.set_option('display.precision', 7)
 # Configure application
 app = Flask(__name__)
-
+engine = create_engine(os.getenv("DATABASE_URL"))
 #serve(app, host="0.0.0.0", port=8080)
 # Ensure templates are auto-reloaded
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
+#app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
 
 
 # Ensure responses aren't cached
