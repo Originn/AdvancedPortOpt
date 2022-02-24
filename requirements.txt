@@ -21,3 +21,4 @@ pandas-datareader
 PyPortfolioOpt
 yfinance
 psycopg2-binary
+scikit-learn
