@@ -16,9 +16,8 @@ from werkzeug.exceptions import default_exceptions, HTTPException, InternalServe
 from werkzeug.security import check_password_hash, generate_password_hash
 import datetime
 import re
-import yfinance as yf
 import pandas as pd
-import time
+import yfinance as yf
 import numpy as np
 from pypfopt import risk_models, plotting, EfficientFrontier, DiscreteAllocation, objective_functions, EfficientSemivariance, efficient_frontier
 import pypfopt
