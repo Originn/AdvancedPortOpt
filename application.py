@@ -307,7 +307,6 @@ def register():
             engine.table_names()
             db.execute("INSERT INTO records (user_id) VALUES (:user_id)", {'user_id': int(session["user_id" ])})
             db.commit()
-            time.sleep(7)
             return redirect("/")
 
     else:
