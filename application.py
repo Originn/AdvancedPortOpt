@@ -31,9 +31,11 @@ dicts={}
 pd.set_option('display.precision', 7)
 # Configure application
 app = Flask(__name__)
-DATABASE_URI = os.getenv['DATABASE_URL']
+DATABASE_URI = os.environ['DATABASE_URL']
+print(DATABASE_URI)
 DATABASE_URI= DATABASE_URI[:8]+'ql' + DATABASE_URI[8:]
-engine = create_engine(os.getenv(DATABASE_URI))
+print(DATABASE_URI)
+engine = create_engine(os.environ(DATABASE_URI))
 
 # Ensure templates are auto-reloaded
 app.config["TEMPLATES_AUTO_RELOAD"] = True
