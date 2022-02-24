@@ -4,9 +4,6 @@ import urllib.parse
 import yfinance as yf
 import pandas as pd
 from operator import itemgetter
-from tkinter import *
-import tkinter as tk
-from tkinter import ttk
 
 
 from flask import redirect, render_template, request, session

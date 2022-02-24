@@ -1,5 +1,6 @@
 import os
 
+from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy import create_engine
 import plotly.graph_objects as go
@@ -24,16 +25,19 @@ import pypfopt
 import io
 from helpers import login_required, lookup, usd, gbp, GBPtoUSD, contains_multiple_words
 import json
+#from waitress import serve
 
-engine = create_engine(os.getenv("DATABASE_URL"))
+#engine = create_engine(os.getenv("DATABASE_URL"))
 
 dicts={}
 pd.set_option('display.precision', 7)
 # Configure application
 app = Flask(__name__)
 
+#serve(app, host="0.0.0.0", port=8080)
 # Ensure templates are auto-reloaded
 app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
 
 
@@ -57,7 +61,8 @@ Session(app)
 
 # Configure CS50 Library to use SQLite database
 #db = SQL("sqlite:///project.db")
-db=scoped_session(sessionmaker(bind=engine))
+#db=scoped_session(sessionmaker(bind=engine))
+db = SQLAlchemy(app)
 
 
 @app.route("/")
