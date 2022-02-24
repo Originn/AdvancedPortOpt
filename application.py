@@ -31,7 +31,7 @@ import io
 from helpers import login_required, lookup, usd, gbp, GBPtoUSD, contains_multiple_words
 import json
 
-engine = create_engine('postgresql://fguklxopatjytr:8f3a549e76b4828b99d91d29232a8e5f889981a061d92fd2a4c68390bcc6a4db@ec2-3-228-222-169.compute-1.amazonaws.com:5432/d70psf828vkthi')
+engine = create_engine(os.getenv("DATABASE_URL"))
 
 dicts={}
 pd.set_option('display.precision', 7)
