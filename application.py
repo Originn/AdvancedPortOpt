@@ -40,6 +40,7 @@ app = Flask(__name__)
 
 # Ensure templates are auto-reloaded
 app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
 
 
 # Ensure responses aren't cached
@@ -77,7 +78,7 @@ def index():
         stocks = [{'symbol': a, 'sumshares': b, 'avgprice': c, 'purchase_p': d} for a, b, c, d in stocks]
     cash = db.execute("SELECT cash FROM users WHERE id = :id", {"id": session["user_id"]}).all()
     cash = ([i[0] for i in cash][0])
-    
+
     totalPortValue = 0
     totalprolos = 0
 
@@ -98,7 +99,7 @@ def index():
         stock['prolos'] = (stock['perc_change']/100)*stock['total']
         totalprolos += stock['prolos']
         totalPortValue += stock['sumshares'] * price
-    
+
     availableCash = cash
     grandTotal = availableCash + totalPortValue
 
@@ -266,7 +267,7 @@ def register():
     """Register user"""
 
     if request.method == "POST":
-    
+
         name = request.form.get("username")
         if not name:
             flash("Missing name")
@@ -709,4 +710,3 @@ def errorhandler(e):
 # Listen for errors
 for code in default_exceptions:
     app.errorhandler(code)(errorhandler)
-
