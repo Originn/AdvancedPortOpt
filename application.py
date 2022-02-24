@@ -1,7 +1,7 @@
 import os
 
-from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy import create_engine
 import plotly.graph_objects as go
 import plotly
 import plotly.express as px
