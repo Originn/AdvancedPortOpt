@@ -1,6 +1,5 @@
 import os
 
-import time
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 import plotly.graph_objects as go
@@ -8,9 +7,6 @@ import plotly
 import plotly.express as px
 import requests
 from pandas_datareader import data as pdr
-from tkinter import *
-import tkinter as tk
-from tkinter import ttk
 import math
 from cs50 import SQL
 from flask import Flask, flash, redirect, render_template, request, session
@@ -22,6 +18,7 @@ import datetime
 import re
 import yfinance as yf
 import pandas as pd
+import time
 import numpy as np
 from pypfopt import risk_models, plotting, EfficientFrontier, DiscreteAllocation, objective_functions, EfficientSemivariance, efficient_frontier
 import pypfopt
