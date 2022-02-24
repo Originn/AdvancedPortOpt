@@ -19,7 +19,7 @@ import re
 import pandas as pd
 import yfinance as yf
 import numpy as np
-from pypfopt import risk_models, plotting, EfficientFrontier, DiscreteAllocation, objective_functions, EfficientSemivariance, efficient_frontier
+from pypfopt import risk_models, DiscreteAllocation, objective_functions, EfficientSemivariance, efficient_frontier, EfficientFrontier
 from pypfopt import EfficientFrontier
 import pypfopt
 import io
