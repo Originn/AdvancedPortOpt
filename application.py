@@ -27,7 +27,7 @@ from helpers import login_required, lookup, usd, gbp, GBPtoUSD, contains_multipl
 import json
 #from waitress import serve
 
-#engine = create_engine(os.getenv("DATABASE_URL"))
+engine = create_engine(os.getenv("DATABASE_URL"))
 
 dicts={}
 pd.set_option('display.precision', 7)
@@ -59,10 +59,9 @@ app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
-# Configure CS50 Library to use SQLite database
-#db = SQL("sqlite:///project.db")
-#db=scoped_session(sessionmaker(bind=engine))
-db = SQLAlchemy(app)
+
+#db = SQLAlchemy(app)
+db=scoped_session(sessionmaker(bind=engine))
 
 
 @app.route("/")
