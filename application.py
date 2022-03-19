@@ -29,7 +29,6 @@ import psycopg2
 from ftplib import FTP
 from io import BytesIO
 from apscheduler.schedulers.background import BackgroundScheduler
-#from flask_caching import Cache
 import bmemcached
 
 dicts={}
@@ -38,15 +37,15 @@ pd.set_option('display.precision', 7)
 # Configure application
 app = Flask(__name__)
 
-#DATABASE_URI = os.environ['DATABASE_URL']
-#DATABASE_URI= DATABASE_URI[:8]+'ql' + DATABASE_URI[8:]
+DATABASE_URI = os.environ['DATABASE_URL']
+DATABASE_URI= DATABASE_URI[:8]+'ql' + DATABASE_URI[8:]
 engine = create_engine(os.getenv("DATABASE_URL"))
 db=scoped_session(sessionmaker(bind=engine))
 # Ensure templates are auto-reloaded
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-#app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
-#
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
+
 # Ensure responses aren't cached
 @app.after_request
 def after_request(response):
