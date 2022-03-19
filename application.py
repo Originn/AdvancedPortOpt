@@ -37,15 +37,15 @@ pd.set_option('display.precision', 7)
 # Configure application
 app = Flask(__name__)
 
-DATABASE_URI = os.environ['DATABASE_URL']
-DATABASE_URI= DATABASE_URI[:8]+'ql' + DATABASE_URI[8:]
-engine = create_engine(DATABASE_URI)
+#DATABASE_URI = os.environ['DATABASE_URL']
+#DATABASE_URI= DATABASE_URI[:8]+'ql' + DATABASE_URI[8:]
+engine = create_engine(os.getenv("DATABASE_URL"))
 db=scoped_session(sessionmaker(bind=engine))
 # Ensure templates are auto-reloaded
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
-
+#app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
+#
 # Ensure responses aren't cached
 @app.after_request
 def after_request(response):
@@ -123,36 +123,41 @@ def index():
     """Show portfolio of stocks"""
     #quering for the symbol and the corresponding sum of the same stock and the average price paid for the stock
     stocks = db.execute("SELECT symbol, SUM(number_of_shares) as sumshares, AVG(price) as avgprice, AVG(purchase_p) as purchase_p FROM records WHERE user_id = :i_d GROUP BY symbol", {"i_d": session["user_id"]}).all()
-    #if stocks[0][0] is None:
-        #stocks = []
-    #else:
-    stocks = [{'symbol': a, 'sumshares': b, 'avgprice': c, 'purchase_p': d} for a, b, c, d in stocks]
-    cash = db.execute("SELECT cash FROM users WHERE id = :id", {"id": session["user_id"]}).all()
-    cash = ([i[0] for i in cash][0])
+    if stocks[0][0] is None:
+        stocks = []
+        cash = db.execute("SELECT cash FROM users WHERE id = :id", {"id": session["user_id"]}).all()
+        availableCash = ([i[0] for i in cash][0])
+        grandTotal = availableCash
+        totalPortValue = 0
+        totalprolos = 0
+    else:
+        stocks = [{'symbol': a, 'sumshares': b, 'avgprice': c, 'purchase_p': d} for a, b, c, d in stocks]
+        cash = db.execute("SELECT cash FROM users WHERE id = :id", {"id": session["user_id"]}).all()
+        cash = ([i[0] for i in cash][0])
 
-    totalPortValue = 0
-    totalprolos = 0
+        totalPortValue = 0
+        totalprolos = 0
 
-    #building the index
-    for stock in stocks:
-        symbol=(stock["symbol"])
-        data=lookup(symbol)
-        name=data["shortName"]
-        price = data["regularMarketPrice"]
-        stock['name'] = name
-        #check if the stock is listed in the UK
-        if ".L" in data["symbol"]:
-            #if it is - convert the price from GBP to USD
-            price=GBPtoUSD()*price
-        stock['ap'] = (stock['sumshares'] * price)/stock['sumshares']
-        stock['total'] = stock['sumshares'] * price
-        stock['perc_change'] = round(((stock['ap'] - stock['purchase_p'])/stock['purchase_p'])*100, 3)
-        stock['prolos'] = (stock['perc_change']/100)*stock['total']
-        totalprolos += stock['prolos']
-        totalPortValue += stock['sumshares'] * price
+        #building the index
+        for stock in stocks:
+            symbol=(stock["symbol"])
+            data=lookup(symbol)
+            name=data["shortName"]
+            price = data["regularMarketPrice"]
+            stock['name'] = name
+            #check if the stock is listed in the UK
+            if ".L" in data["symbol"]:
+                #if it is - convert the price from GBP to USD
+                price=GBPtoUSD()*price
+            stock['ap'] = (stock['sumshares'] * price)/stock['sumshares']
+            stock['total'] = stock['sumshares'] * price
+            stock['perc_change'] = round(((stock['ap'] - stock['purchase_p'])/stock['purchase_p'])*100, 3)
+            stock['prolos'] = (stock['perc_change']/100)*stock['total']
+            totalprolos += stock['prolos']
+            totalPortValue += stock['sumshares'] * price
 
-    availableCash = cash
-    grandTotal = availableCash + totalPortValue
+        availableCash = cash
+        grandTotal = availableCash + totalPortValue
 
     return render_template("/index.html",availableCash=round(availableCash, 4), stocks=stocks, totalPortValue=totalPortValue, grandTotal=grandTotal, totalprolos=totalprolos)
 
@@ -360,6 +365,7 @@ def register():
             #Store user id in db
             rows = db.execute("SELECT * FROM users WHERE username = :username", {"username": request.form.get("username")}).all()
             session["user_id"] = [i[3] for i in rows][0]
+            print(session["user_id"])
             engine.table_names()
             db.execute("INSERT INTO records (user_id) VALUES (:user_id)", {'user_id': int(session["user_id" ])})
             db.commit()
