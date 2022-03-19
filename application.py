@@ -39,7 +39,7 @@ app = Flask(__name__)
 
 DATABASE_URI = os.environ['DATABASE_URL']
 DATABASE_URI= DATABASE_URI[:8]+'ql' + DATABASE_URI[8:]
-engine = create_engine(os.getenv("DATABASE_URL"))
+engine = create_engine(os.getenv("DATABASE_URI"))
 db=scoped_session(sessionmaker(bind=engine))
 # Ensure templates are auto-reloaded
 app.config["TEMPLATES_AUTO_RELOAD"] = True
