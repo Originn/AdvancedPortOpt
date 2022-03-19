@@ -25,24 +25,28 @@ import pypfopt
 import io
 from helpers import login_required, lookup, usd, gbp, GBPtoUSD, contains_multiple_words
 import json
-#from waitress import serve
+import psycopg2
+from ftplib import FTP
+from io import BytesIO
+from apscheduler.schedulers.background import BackgroundScheduler
+#from flask_caching import Cache
+import bmemcached
 
 dicts={}
 pd.set_option('display.precision', 7)
+
 # Configure application
 app = Flask(__name__)
-DATABASE_URI = os.environ['DATABASE_URL']
-print(DATABASE_URI)
-DATABASE_URI= DATABASE_URI[:8]+'ql' + DATABASE_URI[8:]
-print(DATABASE_URI)
-engine = create_engine(DATABASE_URI)
 
+#DATABASE_URI = os.environ['DATABASE_URL']
+#DATABASE_URI= DATABASE_URI[:8]+'ql' + DATABASE_URI[8:]
+engine = create_engine(os.getenv("DATABASE_URL"))
+db=scoped_session(sessionmaker(bind=engine))
 # Ensure templates are auto-reloaded
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-#app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
-
-
+#app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
+#
 # Ensure responses aren't cached
 @app.after_request
 def after_request(response):
@@ -50,6 +54,57 @@ def after_request(response):
     response.headers["Expires"] = 0
     response.headers["Pragma"] = "no-cache"
     return response
+
+#set memcache in Heroku
+servers = os.environ.get('MEMCACHIER_SERVERS', '').split(',')
+user = os.environ.get('MEMCACHIER_USERNAME', '')
+passw = os.environ.get('MEMCACHIER_PASSWORD', '')
+
+mc = bmemcached.Client(servers, username=user, password=passw)
+
+mc.enable_retry_delay(True)
+
+def symbol_search():
+
+    flo = BytesIO()
+
+    directory = 'symboldirectory'
+    filenames = ('otherlisted.txt', 'nasdaqlisted.txt')
+
+    ftp = FTP('ftp.nasdaqtrader.com')
+    ftp.login()
+    ftp.cwd(directory)
+
+    #Create pandas dataframes from the nasdaqlisted and otherlisted files.
+    for item in filenames:
+        nasdaq_exchange_info=[]
+        ftp.retrbinary('RETR ' + item, flo.write)
+        flo.seek(0)
+        nasdaq_exchange_info.append(pd.read_fwf(flo))
+    ftp.quit()
+
+    # Create pandas dataframes from the nasdaqlisted and otherlisted files.
+    nasdaq_exchange_info=pd.concat(nasdaq_exchange_info, axis=1)
+    nasdaq_exchange_info[['symbol', 'name', 'Exchange', 'Symbol', 'etf', 'Lot_size', 'Test', 'NASDAQ_Symbol']]=nasdaq_exchange_info['ACT Symbol|Security Name|Exchange|CQS Symbol|ETF|Round Lot Size|Test Issue|NASDAQ Symbol'].str.split('|', expand=True)
+    nasdaq_exchange_info=nasdaq_exchange_info.drop(nasdaq_exchange_info.columns[[0]], axis=1).dropna()
+    nasdaq_exchange_info=nasdaq_exchange_info[(nasdaq_exchange_info['Test'] != 'Y') & (nasdaq_exchange_info['symbol'] != 'Y') & (~nasdaq_exchange_info.symbol.str.contains('symbol', 'file')) & (~nasdaq_exchange_info.name.str.contains('%', 'arrant'))]
+    nasdaq_exchange_info=nasdaq_exchange_info.drop(['Symbol', 'Exchange', 'Lot_size', 'Test', 'NASDAQ_Symbol', 'etf'], axis = 1)
+    nasdaq_exchange_info=nasdaq_exchange_info[['name', 'symbol']].values.tolist()
+    return mc.set("nasdaq_exchange_info", nasdaq_exchange_info)
+
+symbol_search()
+
+scheduler = BackgroundScheduler(timezone="Europe/London")
+# Runs from Monday to Friday at 5:30 (am)
+scheduler.add_job(
+    func=symbol_search,
+    trigger="cron",
+    max_instances=1,
+    day_of_week='mon-fri',
+    hour=5,
+    minute=30,
+)
+scheduler.start()
 
 
 # Custom filter
@@ -62,9 +117,6 @@ app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
 
-#db = SQLAlchemy(app)
-db=scoped_session(sessionmaker(bind=engine))
-
 
 @app.route("/")
 @login_required
@@ -72,10 +124,10 @@ def index():
     """Show portfolio of stocks"""
     #quering for the symbol and the corresponding sum of the same stock and the average price paid for the stock
     stocks = db.execute("SELECT symbol, SUM(number_of_shares) as sumshares, AVG(price) as avgprice, AVG(purchase_p) as purchase_p FROM records WHERE user_id = :i_d GROUP BY symbol", {"i_d": session["user_id"]}).all()
-    if stocks is None:
-        stocks = []
-    else:
-        stocks = [{'symbol': a, 'sumshares': b, 'avgprice': c, 'purchase_p': d} for a, b, c, d in stocks]
+    #if stocks[0][0] is None:
+        #stocks = []
+    #else:
+    stocks = [{'symbol': a, 'sumshares': b, 'avgprice': c, 'purchase_p': d} for a, b, c, d in stocks]
     cash = db.execute("SELECT cash FROM users WHERE id = :id", {"id": session["user_id"]}).all()
     cash = ([i[0] for i in cash][0])
 
@@ -148,7 +200,8 @@ def buy():
                 db.commit()
                 return redirect("/")
     else:
-        return render_template("buy.html")
+        nasdaq_exchange_info = mc.get("nasdaq_exchange_info")
+        return render_template("buy.html", nasdaq_exchange_info=nasdaq_exchange_info)
 
 
 @app.route("/history", methods=["GET", "POST"])
@@ -380,7 +433,7 @@ def build():
         db.execute("INSERT INTO build (user_id, stocks, date_start, date_end, amount, shortperc, volatility, gamma, target_return) VALUES(:user_id, :stocks, :date_start, :date_end, :amount, :shortperc, :volatility, :gamma, :target_return)",{'user_id':session["user_id"], 'stocks':symbols.upper(), 'date_start':request.form.get("start"), 'date_end':request.form.get("end"), 'amount':request.form.get("funds"), 'shortperc':request.form.get("short"), 'volatility':request.form.get("volatility"), 'gamma':request.form.get("gamma"), 'target_return':request.form.get("return")})
         db.commit()
         try:
-            df = yf.download(symbols, start=request.form.get("start"), end=request.form.get("end"), threads=False)["Adj Close"].dropna(axis=1, how='all')
+            df = yf.download(symbols, start=request.form.get("start"), end=request.form.get("end"), auto_adjust = False, prepost = False, threads = True, proxy = None)["Adj Close"].dropna(axis=1, how='all')
             df = df.replace(0, np.nan)
             try:
                 listofna=df.columns[df.isna().iloc[-2]].tolist()
@@ -396,7 +449,7 @@ def build():
         prices = df.copy()
         fig = px.line(prices, x=prices.index, y=prices.columns, title='Price Graph')
         fig = fig.update_xaxes(rangeslider_visible=True)
-        fig.update_layout(width=900, height=600)
+        fig.update_layout(width=1350, height=900)
         plot_json = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
 
 
@@ -419,8 +472,8 @@ def build():
         layout = go.Layout(
             title_text=title,
             title_x=0.5,
-            width=600,
-            height=600,
+            width=800,
+            height=800,
             xaxis_showgrid=False,
             yaxis_showgrid=False,
             yaxis_autorange='reversed'
@@ -450,8 +503,8 @@ def build():
         layout = go.Layout(
             title_text=title,
             title_x=0.5,
-            width=600,
-            height=600,
+            width=800,
+            height=800,
             xaxis_showgrid=False,
             yaxis_showgrid=False,
             yaxis_autorange='reversed'
@@ -551,7 +604,11 @@ def build():
         returns = pypfopt.expected_returns.returns_from_prices(prices)
         returns = returns.dropna()
         es = EfficientSemivariance(mu, returns)
-        es.efficient_return(float(request.form.get("return"))/100)
+        try:
+            es.efficient_return(float(request.form.get("return"))/100)
+        except ValueError as e:
+            flash(str(e))
+            return redirect("/build")
         perf2=es.portfolio_performance()
         weights = es.clean_weights()
 
@@ -574,8 +631,8 @@ def build():
     else:
         availableCash=db.execute("SELECT cash FROM users WHERE id = :id", {"id": session["user_id"]}).all()
         availableCash=[i[0] for i in availableCash][0]
-
-        return render_template("build.html", availableCash=round(availableCash, 4), GBP=GBPtoUSD())
+        nasdaq_exchange_info=mc.get("nasdaq_exchange_info")
+        return render_template("build.html", availableCash=round(availableCash, 4), GBP=GBPtoUSD(), nasdaq_exchange_info=nasdaq_exchange_info)
 
 @app.route("/allocation", methods=["GET", "POST"])
 @login_required
@@ -697,6 +754,11 @@ def sell_all():
     db.commit()
     return redirect("/")
 
+@app.route("/search")
+#@login_required
+def search():
+    nasdaq_exchange_info = mc.get("nasdaq_exchange_info")
+    return render_template("search.html", nasdaq_exchange_info=nasdaq_exchange_info)
 
 def errorhandler(e):
     """Handle error"""
