@@ -37,14 +37,14 @@ pd.set_option('display.precision', 7)
 # Configure application
 app = Flask(__name__)
 
-#DATABASE_URI = os.environ['DATABASE_URL']
-#DATABASE_URI= DATABASE_URI[:8]+'ql' + DATABASE_URI[8:]
-engine = create_engine(os.getenv("DATABASE_URL"))
+DATABASE_URI = os.environ['DATABASE_URL']
+DATABASE_URI= DATABASE_URI[:8]+'ql' + DATABASE_URI[8:]
+engine = create_engine(DATABASE_URI)
 db=scoped_session(sessionmaker(bind=engine))
 # Ensure templates are auto-reloaded
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-#app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
 #
 # Ensure responses aren't cached
 @app.after_request
