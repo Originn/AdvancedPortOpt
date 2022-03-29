@@ -5,6 +5,19 @@
 {% endblock %}
 
 {% block main %}
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+<script>
+    function goPython() {
+        $.ajax({
+            url: "/sell_all",
+            context: document.body
+    });
+    }
+    function myFunction() {
+        document.getElementById("btn1").disabled = true;
+    }
+</script>
+
     <h5>The password must contain 8 charecters, at least 1 digit and at least 1 uppercase character</h5>
     <form action="/register" method="post">
         <div class="form-group">
@@ -16,6 +29,6 @@
         <div class="form-group">
             <input class="form-control" name="confirmation" placeholder="Confirm Password" type="password">
         </div>
-        <button class="btn btn-primary" type="submit">Register</button>
+        <button class="btn btn-primary" onClick="this.form.submit(); this.disabled=true; this.value='Sending…'; myFunction();" type="submit">Register</button>
     </form>
 {% endblock %}

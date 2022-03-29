@@ -30,6 +30,9 @@ from ftplib import FTP
 from io import BytesIO
 from apscheduler.schedulers.background import BackgroundScheduler
 import bmemcached
+from timeit import default_timer as timer
+#from yfrake import client, server
+
 
 dicts={}
 pd.set_option('display.precision', 7)
@@ -123,7 +126,13 @@ def index():
     """Show portfolio of stocks"""
     #quering for the symbol and the corresponding sum of the same stock and the average price paid for the stock
     stocks = db.execute("SELECT symbol, SUM(number_of_shares) as sumshares, AVG(price) as avgprice, AVG(purchase_p) as purchase_p FROM records WHERE user_id = :i_d GROUP BY symbol", {"i_d": session["user_id"]}).all()
-    if stocks[0][0] is None:
+    if not stocks:
+        cash = db.execute("SELECT cash FROM users WHERE id = :id", {"id": session["user_id"]}).all()
+        availableCash = ([i[0] for i in cash][0])
+        grandTotal = availableCash
+        totalPortValue = 0
+        totalprolos = 0
+    elif stocks[0][0] is None:
         stocks = []
         cash = db.execute("SELECT cash FROM users WHERE id = :id", {"id": session["user_id"]}).all()
         availableCash = ([i[0] for i in cash][0])
@@ -131,17 +140,24 @@ def index():
         totalPortValue = 0
         totalprolos = 0
     else:
+        start1 = timer()
         stocks = [{'symbol': a, 'sumshares': b, 'avgprice': c, 'purchase_p': d} for a, b, c, d in stocks]
         cash = db.execute("SELECT cash FROM users WHERE id = :id", {"id": session["user_id"]}).all()
         cash = ([i[0] for i in cash][0])
+        end1=timer()
+        print(end1 - start1)
+
 
         totalPortValue = 0
         totalprolos = 0
 
         #building the index
         for stock in stocks:
+            start2 = timer()
             symbol=(stock["symbol"])
             data=lookup(symbol)
+            end2=timer()
+            print(end2 - start2)
             name=data["shortName"]
             price = data["regularMarketPrice"]
             stock['name'] = name
@@ -365,7 +381,6 @@ def register():
             #Store user id in db
             rows = db.execute("SELECT * FROM users WHERE username = :username", {"username": request.form.get("username")}).all()
             session["user_id"] = [i[3] for i in rows][0]
-            print(session["user_id"])
             engine.table_names()
             db.execute("INSERT INTO records (user_id) VALUES (:user_id)", {'user_id': int(session["user_id" ])})
             db.commit()
@@ -761,6 +776,7 @@ def sell_all():
 
 @app.route("/search")
 #@login_required
+
 def search():
     nasdaq_exchange_info = mc.get("nasdaq_exchange_info")
     return render_template("search.html", nasdaq_exchange_info=nasdaq_exchange_info)

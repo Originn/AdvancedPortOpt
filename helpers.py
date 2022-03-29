@@ -6,6 +6,7 @@ import pandas as pd
 from operator import itemgetter
 from flask import redirect, render_template, request, session
 from functools import wraps
+import concurrent.futures
 
 
 def login_required(f):
@@ -26,9 +27,8 @@ def login_required(f):
 
 def lookup(symbol):
     try:
-        #response = yf.Ticker(symbol).stats()["price"]
-        keys = ['shortName', 'regularMarketPrice', 'symbol']
-        filtered_response = {k:yf.Ticker(symbol).stats()["price"].get(k) for k in keys}
+        keys=['shortName', 'regularMarketPrice', 'symbol']
+        filtered_response={k:yf.Ticker(symbol).stats()["price"].get(k) for k in keys}
         return filtered_response
     except (KeyError, TypeError, ValueError):
         return None
