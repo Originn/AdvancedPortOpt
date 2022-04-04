@@ -20,12 +20,12 @@ from helpers import login_required, lookup, usd, gbp, GBPtoUSD, contains_multipl
 app = Flask(__name__)
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-#DATABASE_URI = os.environ['DATABASE_URL']
-#DATABASE_URI= DATABASE_URI[:8]+'ql' + DATABASE_URI[8:]
+DATABASE_URI = os.environ['DATABASE_URL']
+DATABASE_URI= DATABASE_URI[:8]+'ql' + DATABASE_URI[8:]
 app.config["TEMPLATES_AUTO_RELOAD"] = True
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
-app.config["SESSION_PERMANENT"] = True
-app.config["SESSION_SQLALCHEMY"] = os.environ['DATABASE_URL']
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
+app.config["SESSION_PERMANENT"] = False
+app.config["SESSION_SQLALCHEMY"] = DATABASE_URI
 app.config["SESSION_TYPE"] = "sqlalchemy"
 app.config["SESSION_SQLALCHEMY_TABLE"] = "session"
 
