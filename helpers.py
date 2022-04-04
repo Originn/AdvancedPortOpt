@@ -6,8 +6,10 @@ import pandas as pd
 from operator import itemgetter
 from flask import redirect, render_template, request, session
 from functools import wraps
-import concurrent.futures
-
+import io
+from io import BytesIO
+from ftplib import FTP
+from apscheduler.schedulers.background import BackgroundScheduler
 
 def login_required(f):
     """
@@ -58,7 +60,7 @@ class RealTimeCurrencyConverter():
         if from_currency != 'USD' :
             amount = amount / self.currencies[from_currency]
 
-        # limiting the precision to 4 decimal places
+        # limiting the precision to 2 decimal places
         amount = round(amount * self.currencies[to_currency], 2)
         return amount
 
@@ -70,3 +72,45 @@ def GBPtoUSD():
 
 def contains_multiple_words(s):
   return len(s.split()) > 1
+
+#function that build the list of tickers
+def symbol_search():
+
+    flo = BytesIO()
+
+    directory = 'symboldirectory'
+    filenames = ('otherlisted.txt', 'nasdaqlisted.txt')
+
+    ftp = FTP('ftp.nasdaqtrader.com')
+    ftp.login()
+    ftp.cwd(directory)
+
+    #Create pandas dataframes from the nasdaqlisted and otherlisted files.
+    for item in filenames:
+        nasdaq_exchange_info=[]
+        ftp.retrbinary('RETR ' + item, flo.write)
+        flo.seek(0)
+        nasdaq_exchange_info.append(pd.read_fwf(flo))
+    ftp.quit()
+
+    # Create pandas dataframes from the nasdaqlisted and otherlisted files.
+    nasdaq_exchange_info=pd.concat(nasdaq_exchange_info, axis=1)
+    nasdaq_exchange_info[['symbol', 'name', 'Exchange', 'Symbol', 'etf', 'Lot_size', 'Test', 'NASDAQ_Symbol']]=nasdaq_exchange_info['ACT Symbol|Security Name|Exchange|CQS Symbol|ETF|Round Lot Size|Test Issue|NASDAQ Symbol'].str.split('|', expand=True)
+    nasdaq_exchange_info=nasdaq_exchange_info.drop(nasdaq_exchange_info.columns[[0]], axis=1).dropna()
+    nasdaq_exchange_info=nasdaq_exchange_info[(nasdaq_exchange_info['Test'] != 'Y') & (nasdaq_exchange_info['symbol'] != 'Y') & (~nasdaq_exchange_info.symbol.str.contains('symbol', 'file')) & (~nasdaq_exchange_info.name.str.contains('%', 'arrant'))]
+    nasdaq_exchange_info=nasdaq_exchange_info.drop(['Symbol', 'Exchange', 'Lot_size', 'Test', 'NASDAQ_Symbol', 'etf'], axis = 1)
+    nasdaq_exchange_info=nasdaq_exchange_info[['name', 'symbol']].values.tolist()
+    return mc.set("nasdaq_exchange_info", nasdaq_exchange_info)
+
+
+scheduler = BackgroundScheduler(timezone="Europe/London")
+# Runs from Monday to Friday at 5:30 (am)
+scheduler.add_job(
+    func=symbol_search,
+    trigger="cron",
+    max_instances=1,
+    day_of_week='mon-fri',
+    hour=5,
+    minute=30,
+)
+scheduler.start()
