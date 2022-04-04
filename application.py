@@ -24,7 +24,7 @@ DATABASE_URI = os.environ['DATABASE_URL']
 DATABASE_URI= DATABASE_URI[:8]+'ql' + DATABASE_URI[8:]
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
-app.config["SESSION_PERMANENT"] = False
+app.config["SESSION_PERMANENT"] = True
 app.config["SESSION_SQLALCHEMY"] = DATABASE_URI
 app.config["SESSION_TYPE"] = "sqlalchemy"
 app.config["SESSION_SQLALCHEMY_TABLE"] = "session"
@@ -46,9 +46,6 @@ class Users(db.Model):
     username=db.Column(db.String)
     hash=db.Column(db.Text)
     cash=db.Column(db.Float)
-    session_id=db.Column(db.String)
-    data=db.Column(db.LargeBinary)
-    expiry=db.Column(db.TIMESTAMP)
 
     def __init__(self, username, hash, cash):
         self.username = username
@@ -369,8 +366,7 @@ def register():
             db.session.add(new_user)
             db.session.commit()
             #Store user id in db
-            username = Users.query.filter_by(username=request.form.get("username")).first()
-            session["user_id"] = username.id
+            session["user_id"] = Users.query.filter_by(username=request.form.get("username")).first().id
             return redirect("/")
 
     else:
