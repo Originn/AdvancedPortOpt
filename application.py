@@ -1,40 +1,31 @@
 import os, plotly, requests, math, datetime, re, json, psycopg2, bmemcached
-
+import plotly.graph_objects as go
+import plotly.express as px
+import pandas as pd
+import yfinance as yf
+import numpy as np
+import pypfopt
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
 from sqlalchemy import desc
-import plotly.graph_objects as go
-#import plotly
-import plotly.express as px
-#import requests
-#import math
 from flask import Flask, flash, redirect, render_template, request, session
 from flask_session import Session
 from werkzeug.exceptions import default_exceptions, HTTPException, InternalServerError
 from werkzeug.security import check_password_hash, generate_password_hash
-#import datetime
-#import re
-import pandas as pd
-import yfinance as yf
-import numpy as np
 from pypfopt import risk_models, DiscreteAllocation, objective_functions, EfficientSemivariance, efficient_frontier, EfficientFrontier
 from pypfopt import EfficientFrontier
-import pypfopt
 from helpers import login_required, lookup, usd, gbp, GBPtoUSD, contains_multiple_words, symbol_search
-#import json
-#import psycopg2
-#import bmemcached
 
 # Configure application
 app = Flask(__name__)
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-DATABASE_URI = os.environ['DATABASE_URL']
-DATABASE_URI= DATABASE_URI[:8]+'ql' + DATABASE_URI[8:]
+#DATABASE_URI = os.environ['DATABASE_URL']
+#DATABASE_URI= DATABASE_URI[:8]+'ql' + DATABASE_URI[8:]
 app.config["TEMPLATES_AUTO_RELOAD"] = True
-app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
 app.config["SESSION_PERMANENT"] = True
-app.config["SESSION_SQLALCHEMY"] = DATABASE_URI
+app.config["SESSION_SQLALCHEMY"] = os.environ['DATABASE_URL']
 app.config["SESSION_TYPE"] = "sqlalchemy"
 app.config["SESSION_SQLALCHEMY_TABLE"] = "session"
 
