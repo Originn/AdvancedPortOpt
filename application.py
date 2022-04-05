@@ -1,4 +1,4 @@
-import os, plotly, requests, math, datetime, re, json, psycopg2, bmemcached
+import os, plotly, requests, math, datetime, re, json, psycopg2, bmemcached, redis
 import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
@@ -15,7 +15,9 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from pypfopt import risk_models, DiscreteAllocation, objective_functions, EfficientSemivariance, efficient_frontier, EfficientFrontier
 from pypfopt import EfficientFrontier
 from helpers import login_required, lookup, usd, gbp, GBPtoUSD, contains_multiple_words, symbol_search
+from urllib.parse import urlparse
 
+#from yfrake import client, server, config
 # Configure application
 app = Flask(__name__)
 
@@ -24,11 +26,10 @@ DATABASE_URI = os.environ['DATABASE_URL']
 DATABASE_URI= DATABASE_URI[:8]+'ql' + DATABASE_URI[8:]
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
-app.config["SESSION_PERMANENT"] = True
-app.config["SESSION_SQLALCHEMY"] = DATABASE_URI
-app.config["SESSION_TYPE"] = "sqlalchemy"
-app.config["SESSION_SQLALCHEMY_TABLE"] = "session"
-
+app.config["SESSION_PERMANENT"] = False
+app.config["SESSION_TYPE"] = "redis"
+url = urlparse(os.environ.get("REDIS_URL"))
+app.config["SESSION_REDIS"]=redis.Redis(host=url.hostname, port=url.port, username=url.username, password=url.password, ssl=True, ssl_cert_reqs=None)
 #set memcache in Heroku
 servers = os.environ.get('MEMCACHIER_SERVERS', '').split(',')
 user = os.environ.get('MEMCACHIER_USERNAME', '')
@@ -39,7 +40,7 @@ mc = bmemcached.Client(servers, username=user, password=passw)
 mc.enable_retry_delay(True)
 
 db = SQLAlchemy(app)
-app.config["SESSION_SQLALCHEMY"] = db
+#app.config["SESSION_SQLALCHEMY"] = db
 
 class Users(db.Model):
     id=db.Column(db.Integer, primary_key=True)
@@ -235,7 +236,6 @@ def history():
         edate=db.session.query(History.time).filter_by(user_id=session["user_id"]).order_by(History.time).first().time
         #get the last date of the history records
         ldate=db.session.query(History.time).filter_by(user_id=session["user_id"]).order_by(desc(History.time)).first().time
-        print(ldate)
         return render_template("history.html", edate=edate, ldate=ldate)
 
 @app.route("/login", methods=["GET", "POST"])
@@ -381,7 +381,6 @@ def sell():
         symbolToSell=request.form.get("symbol")
         NumOfShares =db.session.query(Records.symbol, func.sum(Records.number_of_shares).label('sumshares')).filter_by(user_id=session["user_id"], symbol=str(request.form.get("symbol")), transaction_type='purchase').group_by(Records.symbol).all()
         NumOfShares=[{'symbol': a, 'sumshare': b} for a, b in NumOfShares]
-        print(NumOfShares)
         NumOfshareToSell = int(request.form.get("shares"))
         if NumOfshareToSell > int(NumOfShares[0]["sumshare"]):
             flash("You don't have enough stocks")
@@ -659,7 +658,6 @@ def allocation():
             #insert new row in the database to record the purchase
             new_history=History(session["user_id"], key, price, int(amount), formatted_date, 'purchase')
             db.session.add(new_history)
-            print(amount)
             new_record=Records(session["user_id"], key, int(amount), 'purchase', formatted_date, price, price*int(amount))
             db.session.add(new_record)
             Users.query.filter_by(id=session["user_id"]).update({'cash':availableCash-(amount*price)})
@@ -692,7 +690,6 @@ def allocation1():
             #insert new row in the database to record the purchase
             new_history=History(session["user_id"], key, price, int(amount), formatted_date, 'purchase')
             db.session.add(new_history)
-            print(amount)
             new_record=Records(session["user_id"], key, int(amount), 'purchase', formatted_date, price, price*int(amount))
             db.session.add(new_record)
             Users.query.filter_by(id=session["user_id"]).update({'cash':availableCash-(amount*price)})
@@ -724,7 +721,6 @@ def allocation2():
             #insert new row in the database to record the purchase
             new_history=History(session["user_id"], key, price, int(amount), formatted_date, 'purchase')
             db.session.add(new_history)
-            print(amount)
             new_record=Records(session["user_id"], key, int(amount), 'purchase', formatted_date, price, price*int(amount))
             db.session.add(new_record)
             Users.query.filter_by(id=session["user_id"]).update({'cash':availableCash-(amount*price)})
@@ -736,7 +732,6 @@ def allocation2():
 @login_required
 def sell_all():
     numberofShares=db.session.query(Records.symbol, Records.number_of_shares).filter_by(user_id=session["user_id"]).all()
-    print(numberofShares)
     numberofShares=[{'symbol': a, 'number_of_shares': b} for a, b in numberofShares]
     for stock in numberofShares:
         symbol=stock["symbol"]
