@@ -27,7 +27,10 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
 app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_TYPE"] = "redis"
-url = urlparse(os.environ.get("REDIS_TLS_URL"))
+if 'HEROKU' in os.environ:
+    url = urlparse(os.environ.get("REDIS_TLS_URL"))
+else:
+    url = urlparse(os.environ.get("REDIS_URL"))
 app.config["SESSION_REDIS"]=redis.Redis(host=url.hostname, port=url.port, username=url.username, password=url.password, ssl=True, ssl_cert_reqs=None)
 
 #set memcache in Heroku
