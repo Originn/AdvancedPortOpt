@@ -17,7 +17,6 @@ from pypfopt import EfficientFrontier
 from helpers import login_required, lookup, usd, gbp, GBPtoUSD, contains_multiple_words, symbol_search
 from urllib.parse import urlparse
 
-#from yfrake import client, server, config
 # Configure application
 app = Flask(__name__)
 
@@ -29,7 +28,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
 app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_TYPE"] = "redis"
 url = urlparse(os.environ.get("REDIS_URL"))
-app.config["SESSION_REDIS"]=redis.Redis(host=url.hostname, port=url.port, username=url.username, password=url.password, ssl=True, ssl_cert_reqs=None)
+app.config["SESSION_REDIS"]=redis.Redis(host=url.hostname, port=url.port, username=url.username, password=url.password, ssl=False, ssl_cert_reqs=None)
+
 #set memcache in Heroku
 servers = os.environ.get('MEMCACHIER_SERVERS', '').split(',')
 user = os.environ.get('MEMCACHIER_USERNAME', '')
@@ -40,7 +40,6 @@ mc = bmemcached.Client(servers, username=user, password=passw)
 mc.enable_retry_delay(True)
 
 db = SQLAlchemy(app)
-#app.config["SESSION_SQLALCHEMY"] = db
 
 class Users(db.Model):
     id=db.Column(db.Integer, primary_key=True)
