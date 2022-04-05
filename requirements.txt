@@ -58,3 +58,4 @@ waitress==2.0.0
 Werkzeug==2.0.3
 yfinance==0.1.70
 python-binary-memcached
+redis
