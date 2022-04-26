@@ -14,11 +14,34 @@ from werkzeug.exceptions import default_exceptions, HTTPException, InternalServe
 from werkzeug.security import check_password_hash, generate_password_hash
 from pypfopt import risk_models, DiscreteAllocation, objective_functions, EfficientSemivariance, efficient_frontier, EfficientFrontier
 from pypfopt import EfficientFrontier
-from helpers import login_required, lookup, usd, gbp, GBPtoUSD, contains_multiple_words, symbol_search
+from helpers import login_required, lookup, usd, gbp, GBPtoUSD, contains_multiple_words, symbol_search, price_lookup
 from urllib.parse import urlparse
+import time
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from pytrading212 import *
+import random
+import yfinance.shared as shared
+import numpy as np
+
 
 # Configure application
 app = Flask(__name__)
+
+#setting options for webdriver
+chrome_options = webdriver.ChromeOptions()
+chrome_options.add_argument("no-sandbox")
+chrome_options.add_argument("--disable-extensions")
+chrome_options.add_argument("--headless")
+
+#initiating chrome driver
+driver = webdriver.Chrome('/home/originn/AdvancedPortOpt/chromedriver/stable/chromedriver', options=chrome_options)
+#setting 212 account parameters
+email = os.environ.get("EMAIL")
+password = os.environ.get("PASS")
+
+#initiate trading 212
+#trading212 = Trading212(email, password, driver, mode=Mode.DEMO)
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 DATABASE_URI = os.environ['DATABASE_URL']
@@ -33,6 +56,8 @@ else:
     url = urlparse(os.environ.get("REDIS_URL"))
 app.config["SESSION_REDIS"]=redis.Redis(host=url.hostname, port=url.port, username=url.username, password=url.password, ssl=True, ssl_cert_reqs=None)
 
+db = SQLAlchemy(app)
+
 #set memcache in Heroku
 servers = os.environ.get('MEMCACHIER_SERVERS', '').split(',')
 user = os.environ.get('MEMCACHIER_USERNAME', '')
@@ -41,8 +66,6 @@ passw = os.environ.get('MEMCACHIER_PASSWORD', '')
 mc = bmemcached.Client(servers, username=user, password=passw)
 
 mc.enable_retry_delay(True)
-
-db = SQLAlchemy(app)
 
 class Users(db.Model):
     id=db.Column(db.Integer, primary_key=True)
@@ -72,7 +95,6 @@ class Records(db.Model):
         self.execution_time = execution_time
         self.purchase_p = purchase_p
         self.price = price
-
 
 class History(db.Model):
     status=db.Column(db.Text)
@@ -112,6 +134,21 @@ class Build(db.Model):
         self.date_end = date_end
         self.gamma = gamma
 
+class Test(db.Model):
+    start_date=db.Column(db.Date)
+    end_date=db.Column(db.Date)
+    symbols=db.Column(db.String)
+    profit_loss=db.Column(db.Integer)
+    user_id=db.Column(db.Integer, primary_key=True)
+
+    def __init__(self, start_date, end_date, symbols, profit_loss, user_id):
+        self.user_id = user_id
+        self.start_date = start_date
+        self.end_date = end_date
+        self.symbols = symbols
+        self.profit_loss = profit_loss
+
+
 # Ensure responses aren't cached
 @app.after_request
 def after_request(response):
@@ -124,6 +161,8 @@ def after_request(response):
 # Custom filter
 app.jinja_env.filters["usd"] = usd
 pd.set_option('display.precision', 7)
+nasdaq_exchange_info_dict=mc.get("nasdaq_exchange_info_dict")
+nasdaq_exchange_info = mc.get("nasdaq_exchange_info")
 Session(app)
 
 @app.route("/")
@@ -135,26 +174,25 @@ def index():
 
     if not stocks:
         stocks = []
-        cash = db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
-        availableCash = cash
+        availableCash = db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
         grandTotal = availableCash
         totalPortValue = 0
         totalprolos = 0
 
     else:
-        stocks= [r._asdict() for r in stocks]
+        start= time.time()
+        stocks = [r._asdict() for r in stocks]
         cash = db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
         totalPortValue = 0
         totalprolos = 0
+        #print(nasdaq_exchange_info_dict)
 
         #building the index
         for stock in stocks:
-            data=lookup(stock["symbol"])
-            name=data["shortName"]
-            price = data["regularMarketPrice"]
-            stock["name"] = name
+            price = price_lookup(stock['symbol'])
+            stock["name"] = nasdaq_exchange_info_dict.get(stock['symbol'], 'no')
             #check if the stock is listed in the UK
-            if ".L" in data["symbol"]:
+            if ".L" in stock["symbol"]:
                 #if it is - convert the price from GBP to USD
                 price=GBPtoUSD()*price
             stock['ap'] = (stock['sumshares'] * price)/stock['sumshares']
@@ -166,6 +204,8 @@ def index():
 
         availableCash = cash
         grandTotal = availableCash + totalPortValue
+        end = time.time()
+        print(end - start)
 
     return render_template("/index.html",availableCash=round(availableCash, 4), stocks=stocks, totalPortValue=totalPortValue, grandTotal=grandTotal, totalprolos=totalprolos)
 
@@ -189,11 +229,9 @@ def buy():
 
 
         else:
-            data = lookup(request.form.get("symbol"))
-            symbol=data['symbol']
-            availableCash=db.session.query(Users.cash).filter_by(id=session["user_id"]).first()
-            availableCash=availableCash.cash
-            price=data["regularMarketPrice"]
+            price = price_lookup(request.form.get("symbol"))
+            symbol = request.form.get("symbol")
+            availableCash = db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
             if ".L" in symbol:
                 price=GBPtoUSD()*price
             sharesPrice = price * int(request.form.get("shares"))
@@ -201,18 +239,11 @@ def buy():
                 flash("Not enough money")
                 return redirect ("/buy")
             else:
-                now = datetime.datetime.now()
-                formatted_date = now.strftime('%Y-%m-%d %H:%M:%S')
+                formatted_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 #insert new row in the database to record the purchase
-                user_id=session["user_id"]
-                number_of_shares=request.form.get("shares")
-                time=formatted_date
-                status='purchase'
-                transaction_type='purchase'
-                purchase_p=price
-                new_history=History(user_id, symbol, price, number_of_shares, time, status)
+                new_history=History(session["user_id"], symbol, price, request.form.get("shares"), formatted_date, 'purchase')
                 db.session.add(new_history)
-                new_record=Records(user_id, symbol, request.form.get("shares"), 'purchase', formatted_date, price, price*int(request.form.get("shares")))
+                new_record=Records(session["user_id"], symbol, request.form.get("shares"), 'purchase', formatted_date, price, price*int(request.form.get("shares")))
                 db.session.add(new_record)
                 Users.query.filter_by(id=session["user_id"]).update({'cash': availableCash-sharesPrice})
                 db.session.commit()
@@ -227,18 +258,26 @@ def buy():
 def history():
     """Show history of transactions"""
     if request.method == "POST":
-        history = db.session.query(History.symbol, History.price, History.number_of_shares, History.time).filter_by(user_id=session["user_id"]).filter(History.time >= str(request.form.get("start")), History.time <= str(request.form.get("end"))).all()
+        if request.form.get("start")==request.form.get("end"):
+            history = db.session.query(History.status, History.symbol, History.price, History.number_of_shares, History.time).filter_by(user_id=session["user_id"]).filter(History.time >= request.form.get("start")).all()
+        else:
+            history = db.session.query(History.status, History.symbol, History.price, History.number_of_shares, History.time).filter_by(user_id=session["user_id"]).filter(History.time >= request.form.get("start"), History.time <= request.form.get("end")).all()
         if not history:
            return render_template("history.html")
         else:
             hist=[r._asdict() for r in history]
         return render_template("history1.html", hist=hist)
     else:
-        #get the earlist date of the history records
-        edate=db.session.query(History.time).filter_by(user_id=session["user_id"]).order_by(History.time).first().time
-        #get the last date of the history records
-        ldate=db.session.query(History.time).filter_by(user_id=session["user_id"]).order_by(desc(History.time)).first().time
-        return render_template("history.html", edate=edate, ldate=ldate)
+        try:
+            #get the earlist date of the history records
+            edate=db.session.query(History.time).filter_by(user_id=session["user_id"]).order_by(History.time).first().time.strftime('%Y-%m-%d')
+            print(type(edate))
+            #get the last date of the history records
+            ldate=db.session.query(History.time).filter_by(user_id=session["user_id"]).order_by(desc(History.time)).first().time.strftime('%Y-%m-%d')
+            return render_template("history.html", edate=edate, ldate=ldate)
+        except AttributeError:
+            flash('No history yet')
+            return redirect ("/")
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -299,6 +338,7 @@ def quote():
             flash("Must provide a symbol")
             return redirect("/quote")
         quote = lookup(request.form.get("symbol"))
+        print(quote)
         #if ticker does not exist
         try:
             if quote["symbol"] is None:
@@ -308,8 +348,8 @@ def quote():
             flash("No symbol entered")
             return redirect("/quote")
         else:
-            price=quote["regularMarketPrice"]
             symbol=quote["symbol"]
+            price=quote['regularMarketPrice']
             #if the stock is listed in the United Kingdon add £ sign
             if ".L" in symbol:
                 price=gbp(price)
@@ -317,7 +357,8 @@ def quote():
                 price=usd(price)
             return render_template("quoted.html", name=quote["shortName"], price=price, symbol=symbol)
     else:
-        return render_template("quote.html")
+
+        return render_template("quote.html", nasdaq_exchange_info=nasdaq_exchange_info)
 
 @app.route("/quoted")
 @login_required
@@ -394,10 +435,8 @@ def sell():
                 price=GBPtoUSD()*price
             moneyBack = NumOfshareToSell*price
             #setting up the time stamp to enter the sell into transaction table
-            now = datetime.datetime.now()
-            formatted_date = now.strftime('%Y-%m-%d %H:%M:%S')
-            #entering the sale into transaction table
-            negative= (int(request.form.get("shares"))) * (-1)
+            formatted_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            #entering the sale into history table
             new_history=History(session["user_id"], request.form.get("symbol"), price, int(request.form.get("shares")), formatted_date, 'sell')
             db.session.add(new_history)
             Users.query.filter_by(id=session["user_id"]).update({'cash':cash+moneyBack})
@@ -431,6 +470,7 @@ def expected_returns():
 def build():
     if request.method == "POST":
         symbols = request.form.get("symbols")
+        mc.set("symbols", symbols)
         if contains_multiple_words(symbols) == False:
             flash("The app purpose is to optimize a portfolio given a list of stocks. Please enter a list of stocks seperated by a new row.")
             return redirect("/build")
@@ -438,15 +478,14 @@ def build():
         db.session.commit()
         try:
             df = yf.download(symbols, start=request.form.get("start"), end=request.form.get("end"), auto_adjust = False, prepost = False, threads = True, proxy = None)["Adj Close"].dropna(axis=1, how='all')
+            failed=(list(shared._ERRORS.keys()))
             df = df.replace(0, np.nan)
             try:
-                listofna=df.columns[df.isna().iloc[-2]].tolist()
+                listofna=df.columns[df.isna().iloc[-2]].tolist()+failed
             except IndexError:
                 flash("Please enter valid stocks from Yahoo Finance.")
                 return redirect("/build")
             df = df.loc[:,df.iloc[-2,:].notna()]
-
-
         except ValueError:
             flash("Please enter a valid symbols (taken from Yahoo Finance)")
             return redirect("/build")
@@ -457,13 +496,13 @@ def build():
         plot_json = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
 
 
-        sample_cov = risk_models.sample_cov(prices, frequency=252)
+        exp_cov = risk_models.exp_cov(prices, frequency=252)
 
         #plotting the covariance matrix
         heat = go.Heatmap(
-            z = risk_models.cov_to_corr(sample_cov),
-            x = sample_cov.columns.values,
-            y = sample_cov.columns.values,
+            z = risk_models.cov_to_corr(exp_cov),
+            x = exp_cov.columns.values,
+            y = exp_cov.columns.values,
             zmin = 0, # Sets the lower bound of the color domain
             zmax = 1,
             xgap = 1, # Sets the horizontal gap (in pixels) between bricks
@@ -527,7 +566,6 @@ def build():
 
 
         #using risk models optimized for the Efficient frontier to reduce to min volitility
-        S = risk_models.CovarianceShrinkage(prices).ledoit_wolf()
         ef = EfficientFrontier(None, S)
         try:
             ef.min_volatility()
@@ -590,7 +628,7 @@ def build():
         for col in df.columns:
             if col.endswith(".L"):
                 df.loc[:,col] = df.loc[:,col]*GBPtoUSD()
-        latest_prices1 = df.iloc[0]  # prices as of the day you are allocating
+        latest_prices1 = df.iloc[-1]  # prices as of the day you are allocating
         if float(request.form.get("funds")) <= 0 or float(request.form.get("funds")) == " ":
             flash("Amount need to be a positive number")
             return redirect("/build")
@@ -618,7 +656,7 @@ def build():
         for col in df.columns:
             if col.endswith(".L"):
                 df.loc[:,col] = df.loc[:,col]*GBPtoUSD()
-        latest_prices2 = df.iloc[0]  # prices as of the day you are allocating
+        latest_prices2 = df.iloc[-1]  # prices as of the day you are allocating
         if float(request.form.get("funds")) <= 0 or float(request.form.get("funds")) == " ":
             flash("Amount need to be a positive number")
             return redirect("/build")
@@ -629,42 +667,50 @@ def build():
         alloc2, leftover2 = da.lp_portfolio()
         session['alloc2']=alloc2
         session['latest_prices2']=latest_prices2
+        mc.delete("symbols")
         return render_template ("built.html",av=av, leftover=leftover, alloc=alloc, ret=float(request.form.get("return")),gamma=request.form.get("gamma"),volatility=request.form.get("volatility"),perf=perf, perf2=perf2, alloc1=alloc1, alloc2=alloc2, plot_json=plot_json, plot_json1=plot_json1, plot_json2=plot_json2, plot_json3=plot_json3, plot_json4=plot_json4, plot_json5=plot_json5, leftover1=leftover1, leftover2=leftover2,listofna=(', '.join(listofna)))
     else:
+        if mc.get("symbols"):
+            cached_symbols=mc.get("symbols")
+        else:
+            cached_symbols=''
         availableCash=db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
         nasdaq_exchange_info=mc.get("nasdaq_exchange_info")
-        return render_template("build.html", availableCash=round(availableCash, 4), GBP=GBPtoUSD(), nasdaq_exchange_info=nasdaq_exchange_info)
+        return render_template("build.html", availableCash=round(availableCash, 4), GBP=GBPtoUSD(), nasdaq_exchange_info=nasdaq_exchange_info, cached_symbols=cached_symbols)
 
-@app.route("/allocation", methods=["GET", "POST"])
+@app.route("/allocation", methods=["POST"])
 @login_required
 def allocation():
-    alloc=session['alloc']
-    latest_prices=session['latest_prices']
-    values = alloc.values()
-    total = sum(values)
-    for key, value in alloc.items():
-        price=latest_prices[key]
-        amount=value
-        availableCash=db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
-        sharesPrice = price * amount
-        if sharesPrice > availableCash:
-            flash("Not enough money to buy:", str(key))
-            return redirect ("/built")
+    if request.form.get('demo') == 'buy':
+        alloc=session['alloc']
+        latest_prices=session['latest_prices']
+        values = alloc.values()
+        total = sum(values)
+        for key, value in alloc.items():
+            price=latest_prices[key]
+            amount=value
+            availableCash=db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
+            sharesPrice = price * amount
+            if sharesPrice > availableCash:
+                flash("Not enough money to buy:", str(key))
+                return redirect ("/built")
 
-        else:
-            if ".L" in key:
-                price=GBPtoUSD()*price
-            now = datetime.datetime.now()
-            formatted_date = now.strftime('%Y-%m-%d %H:%M:%S')
-
-            #insert new row in the database to record the purchase
-            new_history=History(session["user_id"], key, price, int(amount), formatted_date, 'purchase')
-            db.session.add(new_history)
-            new_record=Records(session["user_id"], key, int(amount), 'purchase', formatted_date, price, price*int(amount))
-            db.session.add(new_record)
-            Users.query.filter_by(id=session["user_id"]).update({'cash':availableCash-(amount*price)})
-            db.session.commit()
-
+            else:
+                if ".L" in key:
+                    price=GBPtoUSD()*price
+                formatted_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                #insert new row in the database to record the purchase
+                new_history=History(session["user_id"], key, price, int(amount), formatted_date, 'purchase')
+                db.session.add(new_history)
+                new_record=Records(session["user_id"], key, int(amount), 'purchase', formatted_date, price, price*int(amount))
+                db.session.add(new_record)
+                Users.query.filter_by(id=session["user_id"]).update({'cash':availableCash-(amount*price)})
+                db.session.commit()
+    else:
+        #alloc=session['alloc']
+        #for key, value in alloc.items():
+        portfolio = trading212.get_portfolio_composition()
+        print(portfolio)
     return redirect("/")
 
 @app.route("/allocation1", methods=["GET", "POST"])
@@ -687,8 +733,7 @@ def allocation1():
         else:
             if ".L" in key:
                 price=GBPtoUSD()*price
-            now = datetime.datetime.now()
-            formatted_date = now.strftime('%Y-%m-%d %H:%M:%S')
+            formatted_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             #insert new row in the database to record the purchase
             new_history=History(session["user_id"], key, price, int(amount), formatted_date, 'purchase')
             db.session.add(new_history)
@@ -718,8 +763,7 @@ def allocation2():
         else:
             if ".L" in key:
                 price=GBPtoUSD()*price
-            now = datetime.datetime.now()
-            formatted_date = now.strftime('%Y-%m-%d %H:%M:%S')
+            formatted_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             #insert new row in the database to record the purchase
             new_history=History(session["user_id"], key, price, int(amount), formatted_date, 'purchase')
             db.session.add(new_history)
@@ -734,28 +778,118 @@ def allocation2():
 @login_required
 def sell_all():
     numberofShares=db.session.query(Records.symbol, Records.number_of_shares).filter_by(user_id=session["user_id"]).all()
-    numberofShares=[{'symbol': a, 'number_of_shares': b} for a, b in numberofShares]
+    #numberofShares=[{'symbol': a, 'number_of_shares': b} for a, b in numberofShares]
     for stock in numberofShares:
-        symbol=stock["symbol"]
-        data=lookup(symbol)
-        NumOfshareToSell=stock["number_of_shares"]
+        price=price_lookup(stock.symbol)
         cash=db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
-        price = data["regularMarketPrice"]
-        if ".L" in symbol:
+        if ".L" in stock.symbol:
             price=GBPtoUSD()*price
-        moneyBack = (int(NumOfshareToSell))*price
+        moneyBack = (int(stock.number_of_shares))*price
         #setting up the time stamp to enter the sell into transaction table
-        now = datetime.datetime.now()
-        formatted_date = now.strftime('%Y-%m-%d %H:%M:%S')
-        #entering the sale into transaction table
-        negative= (int(NumOfshareToSell)) * (-1)
-        new_history=History(session["user_id"], symbol, price, NumOfshareToSell, formatted_date, 'sell')
+        formatted_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        #entering the sale into history table
+        new_history=History(session["user_id"], stock.symbol, price, stock.number_of_shares, formatted_date, 'sell')
         db.session.add(new_history)
         Users.query.filter_by(id=session["user_id"]).update({'cash':cash+moneyBack})
         db.session.commit()
     Records.query.filter_by(user_id=session["user_id"]).delete()
     db.session.commit()
     return redirect("/")
+
+@app.route("/test", methods=["GET", "POST"])
+@login_required
+def test():
+    if request.method == "POST":
+        if request.form.get("data") == 'sp500':
+            nasdaq_exchange_info = pd.read_csv('s&p500.csv')
+            nasdaq_exchange_info = list(nasdaq_exchange_info['Symbol'])
+        elif request.form.get("data") == 'nasdaq':
+            nasdaq_exchange_info = pd.read_csv('nasdaqlisted.txt', sep = '|')
+            nasdaq_exchange_info = list(nasdaq_exchange_info['Symbol'])
+        else:
+            nasdaq_exchange_info = pd.read_csv('otherlisted.txt', sep = '|')
+            nasdaq_exchange_info = list(nasdaq_exchange_info['NASDAQ Symbol'])
+        #nasdaq_exchange_info=nasdaq_exchange_info['Symbol'].tolist()
+        #selected="AAPL MSFT A V TSLA GOOGL BA TEVA OXY AIG BABA TWTR"
+        i=0
+        for i in range(10):
+            selected=random.sample(nasdaq_exchange_info, int(request.form.get("random")))
+            #print('selected:', selected)
+            try:
+                df = yf.download(selected, start=request.form.get("start"), end=request.form.get("end"), auto_adjust = False, prepost = False, threads = True, proxy = None)["Adj Close"].dropna(axis=1, how='all').sort_values('Date')
+                #df.to_csv('dfcsv.csv')
+                #tobefixed = []
+                #for column in df:
+                    #print(df[column][0])
+                    #print(df[column].isnull().sum() * 100 / len(df[column]))
+                    #print('first value is:',df[column][0])
+                    #if df[column].isnull().sum() * 100 / len(df[column]) > 0.4 and np.isfinite(df[column][0]):
+                        #print(column)
+                        #tobefixed.append(column)
+                        #fixed = yf.download(column, start=request.form.get("start"), end=request.form.get("end"), auto_adjust = False, prepost = False, threads = True, proxy = None)["Adj Close"]
+                        #print('the new null ratio is:', fixed.isnull().sum() * 100 / len(fixed))
+                        #fixed.to_csv(column+'.csv')
+                #print('tobefixed:', tobefixed)
+                #fixed = yf.download(tobefixed, start=request.form.get("start"), end=request.form.get("end"), auto_adjust = False, prepost = False, threads = True, proxy = None)["Adj Close"].dropna(axis=1, how='all')
+                #for column in fixed:
+                    #print(fixed[column].isnull().sum() * 100 / len(fixed[column]))
+                failed=(list(shared._ERRORS.keys()))
+                df = df.replace(0, np.nan)
+                try:
+                    listofna=df.columns[df.isna().iloc[-2]].tolist()+failed
+                except IndexError:
+                    flash("Please enter valid stocks from Yahoo Finance.")
+                    return redirect("/test")
+                df = df.loc[:,df.iloc[-2,:].notna()]
+                #print(df)
+            except ValueError:
+                flash("Please enter a valid symbols (taken from Yahoo Finance)")
+                return redirect("/test")
+            prices = df.copy()
+            #fig = px.line(prices, x=prices.index, y=prices.columns, title='Price Graph')
+            #fig = fig.update_xaxes(rangeslider_visible=True)
+            #fig.update_layout(width=1350, height=900)
+            #plot_json = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+            mu = pypfopt.expected_returns.capm_return(prices)
+            S = risk_models.CovarianceShrinkage(prices).ledoit_wolf()
+            try:
+                ef = EfficientFrontier(mu, S)
+                ef.add_objective(objective_functions.L2_reg, gamma=(request.form.get("gamma")))  # gamme is the tuning parameter
+                ef.efficient_risk(25)
+                weights = ef.clean_weights()
+                su = pd.DataFrame([weights])
+                perf =ef.portfolio_performance()
+            except Exception as e:
+                flash(str(e))
+                return redirect("/test")
+            #for col in df.columns:
+                #if col.endswith(".L"):
+                    #df.loc[:,col] = df.loc[:,col]*GBPtoUSD()
+            latest_prices1 = df.iloc[-1]  # prices as of the day you are allocating
+            da = DiscreteAllocation(weights, latest_prices1, total_portfolio_value=10000)
+            alloc1, leftover1 = da.lp_portfolio()
+            #print('latest_prices1:', latest_prices1)
+
+            totalprice=0
+            totalnewprice=0
+            for key, value in alloc1.items():
+                price=latest_prices1[key]
+                sharesPrice = price * int(value)
+                todayprice = price_lookup(key)
+                totalnewprice += todayprice*int(value)
+                #if ".L" in key:
+                    #price=GBPtoUSD()*price
+                totalprice += sharesPrice
+            profitloss=totalnewprice-totalprice+leftover1
+            new_test=Test(request.form.get("start"), request.form.get("end"), list(alloc1.keys()), profitloss, session["user_id"])
+            db.session.add(new_test)
+            db.session.commit()
+            i += 1
+        return render_template("test1.html", plot_json=plot_json, listofna=listofna, profitloss=profitloss, alloc1=alloc1)
+    else:
+        return render_template("test.html")
+
+
 
 def errorhandler(e):
     """Handle error"""

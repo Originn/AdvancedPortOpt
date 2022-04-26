@@ -26,8 +26,8 @@
         <td>{{ stock["name"] }}</td>
         <td>{{ stock["sumshares"] }}</td>
         <td>{{ stock["purchase_p"] | usd }}</td>
-        <td>{{ stock['ap'] | usd }}</td>
-        {% if stock['perc_change'] > 0 %}
+        <td>{{ stock["ap"] | usd }}</td>
+        {% if stock["perc_change"] > 0 %}
           <td style="color:green;">&#x25B2;{{ stock['perc_change'] }}%</td>
           <td style="color:green;">{{ stock['prolos'] | usd }}</td>
         {% elif stock['perc_change'] < 0 %}
@@ -37,16 +37,16 @@
           <td style="color:gray;">{{ stock['perc_change'] }}%</td>
           <td style="color:gray;">{{ 0.00 | usd }}</td>
         {% endif  %}
-        <td>{{ stock['total'] | usd }}</td> 
+        <td>{{ stock['total'] | usd }}</td>
       </tr>
     </tbody>
   {% endfor %}
 </table>
   <div style=padding-bottom:20px>
-      <h4>Cash: {{ availableCash | usd }}</h4> 
+      <h4>Cash: {{ availableCash | usd }}</h4>
   </div>
   <div style=padding-bottom:20px>
-    <h4>Total Value: {{ grandTotal | usd }}</h4> 
+    <h4>Total Value: {{ grandTotal | usd }}</h4>
   </div>
   <div>
     {% if totalprolos > 0 %}

@@ -13,13 +13,22 @@
   <input id="myInput" type="text" name="stock" placeholder="Company Name">
 </div>
 <div class="form-group">
-    <textarea rows=10 id="myTxt" class="form-control" name="symbols" placeholder="symbols" type="text"></textarea>
+    <textarea rows=10 id="myTxt" class="form-control" name="symbols" placeholder="symbols" type="text">{{ cached_symbols }}</textarea>
 </div>
 <h3>Please enter the time range to pull data from</h3>
         <div class="form-group">
             <input autocomplete="off" value="2015-01-01" class="form-control" name="start" placeholder="start" type="date">
             <input autocomplete="off" id="today" class="form-control" name="end" placeholder="end" type="date">
         </div>
+
+<h3>Please select the method of analysis</h3>
+<div class="form-group">
+<select name="data">
+    <option value="min_variance">Long/short min variance</option>
+    <option value="nasdaq">NASDAQ</option>
+    <option value="other">OTHER</option>
+</select>
+</div>
 
 <h3>Please enter the amount to be invested</h3>
         <div class="form-group">
@@ -33,9 +42,9 @@
         </div>
 
 <h3>Please enter your gamma</h3>
-<p>Gamma is the tuning parameter. Larger gamma pulls portfolio weights towards an equal allocation. Gamma range is between 0 and 1</p>
+<p>Gamma is the tuning parameter. Larger gamma pulls portfolio weights towards an equal allocation. Gamma range is between 0 and 10, floats are also acceptable</p>
         <div class="form-group">
-            <input autocomplete="off" value="0.1" class="form-control" name="gamma" placeholder="gamma" type="number" step=".1" min="0" max="1">
+            <input autocomplete="off" value="0.1" class="form-control" name="gamma" placeholder="gamma" type="number" step=".1" min="0" max="10">
         </div>
 
 <h3> Please enter target annual rate of return</h3>

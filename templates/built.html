@@ -11,8 +11,11 @@
         document.getElementById("btn1").disabled = true;
         document.getElementById("btn2").disabled = true;
         document.getElementById("btn3").disabled = true;
+        document.getElementById("btn4").disabled = true;
     }
 </script>
+
+
 <div class="alert1">
   <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span>
   The following symbols have been removed due to low quality data: {{ listofna }}
@@ -57,8 +60,9 @@ Plotly.plot('plotly-timeseries4', graph, {});
   <p style="color:red;">Please note that the symbols prices may change between the time it takes to choose your portfolio</p>
   <P>{{ alloc }}</P>
   <p>{{ "$%.2f" | format(leftover) }} leftover</p>
-  <form action="/allocation" method="post">
-    <button class="btn btn-primary" onclick="this.form.submit(); myFunction()" id="btn1">Buy</button>
+  <form action="/allocation" onsubmit="myFunction()" method="post">
+    <input type="submit" name="demo" class="btn btn-primary" onclick="this.form.submit()" id="btn1" value="Buy">
+    <input type="submit" name="212demo" class="btn btn-primary" onclick="this.form.submit()" id="btn4" value="212demo">
   </form>
 </div>
 

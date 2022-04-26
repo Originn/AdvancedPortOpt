@@ -1,5 +1,5 @@
 import os
-import requests
+import requests, bmemcached
 import urllib.parse
 import yfinance as yf
 import pandas as pd
@@ -10,6 +10,16 @@ import io
 from io import BytesIO
 from ftplib import FTP
 from apscheduler.schedulers.background import BackgroundScheduler
+import numpy as np
+
+#set memcache in Heroku
+servers = os.environ.get('MEMCACHIER_SERVERS', '').split(',')
+user = os.environ.get('MEMCACHIER_USERNAME', '')
+passw = os.environ.get('MEMCACHIER_PASSWORD', '')
+
+mc = bmemcached.Client(servers, username=user, password=passw)
+
+mc.enable_retry_delay(True)
 
 def login_required(f):
     """
@@ -27,6 +37,13 @@ def login_required(f):
 #using yahoo finance as a source for stock data (yahoo have much more tickers and does not have limit on searchs)
 #however, it's very slow, so I'll try to implement a faster search using multiple threads.
 
+def price_lookup(symbol):
+    try:
+        filtered_response=yf.Ticker(symbol).stats()["price"].get('regularMarketPrice')
+        return filtered_response
+    except (KeyError, TypeError, ValueError):
+        return None
+
 def lookup(symbol):
     try:
         keys=['shortName', 'regularMarketPrice', 'symbol']
@@ -34,7 +51,6 @@ def lookup(symbol):
         return filtered_response
     except (KeyError, TypeError, ValueError):
         return None
-
 
 def usd(value):
     """Format value as USD."""
@@ -44,7 +60,7 @@ def usd(value):
         return redirect ("/")
 
 def gbp(value):
-    """Format value as USD."""
+    """Format value as GBP."""
     try:
         return f"£{value:,.2f}"
     except TypeError:
@@ -100,7 +116,8 @@ def symbol_search():
     nasdaq_exchange_info=nasdaq_exchange_info[(nasdaq_exchange_info['Test'] != 'Y') & (nasdaq_exchange_info['symbol'] != 'Y') & (~nasdaq_exchange_info.symbol.str.contains('symbol', 'file')) & (~nasdaq_exchange_info.name.str.contains('%', 'arrant'))]
     nasdaq_exchange_info=nasdaq_exchange_info.drop(['Symbol', 'Exchange', 'Lot_size', 'Test', 'NASDAQ_Symbol', 'etf'], axis = 1)
     nasdaq_exchange_info=nasdaq_exchange_info[['name', 'symbol']].values.tolist()
-    return mc.set("nasdaq_exchange_info", nasdaq_exchange_info)
+    nasdaq_exchange_info_dict=dict(map(reversed, nasdaq_exchange_info))
+    return mc.set("nasdaq_exchange_info", nasdaq_exchange_info), mc.set("nasdaq_exchange_info_dict", nasdaq_exchange_info_dict)
 
 
 scheduler = BackgroundScheduler(timezone="Europe/London")
