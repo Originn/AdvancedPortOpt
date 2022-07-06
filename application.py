@@ -19,11 +19,11 @@ from urllib.parse import urlparse
 import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from pytrading212 import *
+#from pytrading212 import *
 import random
 import yfinance.shared as shared
 import numpy as np
-
+from datetime import datetime
 
 # Configure application
 app = Flask(__name__)
@@ -33,15 +33,6 @@ chrome_options = webdriver.ChromeOptions()
 chrome_options.add_argument("no-sandbox")
 chrome_options.add_argument("--disable-extensions")
 chrome_options.add_argument("--headless")
-
-#initiating chrome driver
-driver = webdriver.Chrome('/home/originn/AdvancedPortOpt/chromedriver/stable/chromedriver', options=chrome_options)
-#setting 212 account parameters
-email = os.environ.get("EMAIL")
-password = os.environ.get("PASS")
-
-#initiate trading 212
-#trading212 = Trading212(email, password, driver, mode=Mode.DEMO)
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 DATABASE_URI = os.environ['DATABASE_URL']
@@ -140,14 +131,23 @@ class Test(db.Model):
     symbols=db.Column(db.String)
     profit_loss=db.Column(db.Integer)
     user_id=db.Column(db.Integer, primary_key=True)
+    profit_date=db.Column(db.Date, default=None)
+    method=db.Column(db.String)
+    max_profit_value=db.Column(db.Integer)
+    target_profit=db.Column(db.Integer, default=None)
+    gamma=db.Column(db.Float)
 
-    def __init__(self, start_date, end_date, symbols, profit_loss, user_id):
+    def __init__(self, start_date, end_date, symbols, profit_loss, user_id, profit_date, method, max_profit_value, target_profit, gamma):
         self.user_id = user_id
         self.start_date = start_date
         self.end_date = end_date
         self.symbols = symbols
         self.profit_loss = profit_loss
-
+        self.profit_date=profit_date
+        self.method=method
+        self.max_profit_value=max_profit_value
+        self.target_profit=target_profit
+        self.gamma=gamma
 
 # Ensure responses aren't cached
 @app.after_request
@@ -209,12 +209,12 @@ def index():
 
     return render_template("/index.html",availableCash=round(availableCash, 4), stocks=stocks, totalPortValue=totalPortValue, grandTotal=grandTotal, totalprolos=totalprolos)
 
+
 @app.route("/buy", methods=["GET", "POST"])
 @login_required
 def buy():
     """Buy shares of stock"""
     if request.method == "POST":
-
         try:
             shares = int(request.form.get("shares"))
         except ValueError:
@@ -812,27 +812,15 @@ def test():
         #nasdaq_exchange_info=nasdaq_exchange_info['Symbol'].tolist()
         #selected="AAPL MSFT A V TSLA GOOGL BA TEVA OXY AIG BABA TWTR"
         i=0
-        for i in range(10):
+        for i in range(4):
+            method='semi-variance'
             selected=random.sample(nasdaq_exchange_info, int(request.form.get("random")))
             #print('selected:', selected)
             try:
                 df = yf.download(selected, start=request.form.get("start"), end=request.form.get("end"), auto_adjust = False, prepost = False, threads = True, proxy = None)["Adj Close"].dropna(axis=1, how='all').sort_values('Date')
-                #df.to_csv('dfcsv.csv')
-                #tobefixed = []
-                #for column in df:
-                    #print(df[column][0])
-                    #print(df[column].isnull().sum() * 100 / len(df[column]))
-                    #print('first value is:',df[column][0])
-                    #if df[column].isnull().sum() * 100 / len(df[column]) > 0.4 and np.isfinite(df[column][0]):
-                        #print(column)
-                        #tobefixed.append(column)
-                        #fixed = yf.download(column, start=request.form.get("start"), end=request.form.get("end"), auto_adjust = False, prepost = False, threads = True, proxy = None)["Adj Close"]
-                        #print('the new null ratio is:', fixed.isnull().sum() * 100 / len(fixed))
-                        #fixed.to_csv(column+'.csv')
-                #print('tobefixed:', tobefixed)
-                #fixed = yf.download(tobefixed, start=request.form.get("start"), end=request.form.get("end"), auto_adjust = False, prepost = False, threads = True, proxy = None)["Adj Close"].dropna(axis=1, how='all')
-                #for column in fixed:
-                    #print(fixed[column].isnull().sum() * 100 / len(fixed[column]))
+                print(datetime.today().strftime('%Y-%m-%d'))
+                #another download to check the time from last download to today in order to check if the target was reached in any of the days
+                dftest=yf.download(selected, start=request.form.get("end"), end=datetime.today().strftime('%Y-%m-%d'), auto_adjust = False, prepost = False, threads = True, proxy = None)["Adj Close"].dropna(axis=1, how='all').sort_values('Date')
                 failed=(list(shared._ERRORS.keys()))
                 df = df.replace(0, np.nan)
                 try:
@@ -841,7 +829,6 @@ def test():
                     flash("Please enter valid stocks from Yahoo Finance.")
                     return redirect("/test")
                 df = df.loc[:,df.iloc[-2,:].notna()]
-                #print(df)
             except ValueError:
                 flash("Please enter a valid symbols (taken from Yahoo Finance)")
                 return redirect("/test")
@@ -851,41 +838,62 @@ def test():
             #fig.update_layout(width=1350, height=900)
             #plot_json = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
             mu = pypfopt.expected_returns.capm_return(prices)
-            S = risk_models.CovarianceShrinkage(prices).ledoit_wolf()
+            returns = pypfopt.expected_returns.returns_from_prices(prices)
+            returns = returns.dropna()
+            es = EfficientSemivariance(mu, returns)
             try:
-                ef = EfficientFrontier(mu, S)
-                ef.add_objective(objective_functions.L2_reg, gamma=(request.form.get("gamma")))  # gamme is the tuning parameter
-                ef.efficient_risk(25)
-                weights = ef.clean_weights()
-                su = pd.DataFrame([weights])
-                perf =ef.portfolio_performance()
-            except Exception as e:
+                es.efficient_return(0.15)
+            except ValueError as e:
                 flash(str(e))
                 return redirect("/test")
+            perf2=es.portfolio_performance()
+            weights = es.clean_weights()
+            gamma=None
             #for col in df.columns:
                 #if col.endswith(".L"):
                     #df.loc[:,col] = df.loc[:,col]*GBPtoUSD()
-            latest_prices1 = df.iloc[-1]  # prices as of the day you are allocating
-            da = DiscreteAllocation(weights, latest_prices1, total_portfolio_value=10000)
-            alloc1, leftover1 = da.lp_portfolio()
-            #print('latest_prices1:', latest_prices1)
+            latest_prices2 = df.iloc[-1]  # prices as of the day you are allocating
+            da = DiscreteAllocation(weights, latest_prices2, total_portfolio_value=10000)
+            alloc2, leftover2 = da.lp_portfolio()
+            #create a df where we can test if the portfolio reached the desired yield.
+            dftest=dftest.loc[:, dftest.columns.isin(list(alloc2.keys()))]
+            #create a total value df where we can see the value of the portfolio on each day
+            df1 = dftest.dot(pd.Series(alloc2))+leftover2
+            #checking if profits on the day reached the target yield
+            for index, row in df1.items():
+                if row >= (10000*1.15):
+                    print('Target reached on {}, and the value was {}'.format(index, row))
+                    profit_date=index
+                    target_profit=row-10000
+                    fail=False
+                    break
+                else:
+                    fail=True
+                    profit_date=None
+                    target_profit=None
+            if fail:
+                print("We didn't reach the target")
 
+            max_profit_value=df1.max()-10000
+            print('max value was:', df1.max())
             totalprice=0
             totalnewprice=0
-            for key, value in alloc1.items():
-                price=latest_prices1[key]
+            #check what is the value of the stocks today
+            for key, value in alloc2.items():
+                price=latest_prices2[key]
                 sharesPrice = price * int(value)
                 todayprice = price_lookup(key)
                 totalnewprice += todayprice*int(value)
                 #if ".L" in key:
                     #price=GBPtoUSD()*price
                 totalprice += sharesPrice
-            profitloss=totalnewprice-totalprice+leftover1
-            new_test=Test(request.form.get("start"), request.form.get("end"), list(alloc1.keys()), profitloss, session["user_id"])
+            #what is thevalue of the portfolio today
+            profitloss=totalnewprice-totalprice+leftover2
+            new_test=Test(request.form.get("start"), request.form.get("end"), list(alloc2.keys()), profitloss, session["user_id"], profit_date, method, max_profit_value, target_profit, gamma)
             db.session.add(new_test)
             db.session.commit()
             i += 1
-        return render_template("test1.html", plot_json=plot_json, listofna=listofna, profitloss=profitloss, alloc1=alloc1)
+        return render_template("test1.html", listofna=listofna, profitloss=profitloss, alloc2=alloc2)
     else:
         return render_template("test.html")
 

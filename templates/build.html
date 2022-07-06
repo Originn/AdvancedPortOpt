@@ -21,33 +21,24 @@
             <input autocomplete="off" id="today" class="form-control" name="end" placeholder="end" type="date">
         </div>
 
-<h3>Please select the method of analysis</h3>
-<div class="form-group">
-<select name="data">
-    <option value="min_variance">Long/short min variance</option>
-    <option value="nasdaq">NASDAQ</option>
-    <option value="other">OTHER</option>
-</select>
-</div>
-
 <h3>Please enter the amount to be invested</h3>
         <div class="form-group">
             <input autocomplete="off" value={{ availableCash }} class="form-control" name="funds" placeholder="amount" type="number" min="1">
         </div>
 
 
-<h3>Please enter your upper bounds volatility constraint</h3>
+<h3>Please enter your upper bounds volatility constraint <i class="fa-solid fa-circle-question fa-2xs" title="Volatility = How much the portfolio move up or down"></i></h3>
         <div class="form-group">
             <input autocomplete="off" value="25" class="form-control" name="volatility" placeholder="volatility" type="number" min="0">%
         </div>
 
-<h3>Please enter your gamma</h3>
-<p>Gamma is the tuning parameter. Larger gamma pulls portfolio weights towards an equal allocation. Gamma range is between 0 and 10, floats are also acceptable</p>
+
+<h3>Please enter your gamma  <i class="fa-solid fa-circle-question fa-2xs" title="Larger gamma pulls the portfolio towards an equal stock allocation. Gamma range is between 0 and 10, floats are also acceptable"></i></h3>
         <div class="form-group">
             <input autocomplete="off" value="0.1" class="form-control" name="gamma" placeholder="gamma" type="number" step=".1" min="0" max="10">
         </div>
 
-<h3> Please enter target annual rate of return</h3>
+<h3> Please enter target annual rate of return <i class="fa-solid fa-circle-question fa-2xs" title="What is your target profit as percentage of the total amount invested"></i></h3>
         <div class="form-group">
             <input autocomplete="off" value="10" class="form-control" name="return" placeholder="rate of return" type="number" min="1">%
         </div>

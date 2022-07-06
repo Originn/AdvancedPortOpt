@@ -117,6 +117,7 @@ def symbol_search():
     nasdaq_exchange_info=nasdaq_exchange_info.drop(['Symbol', 'Exchange', 'Lot_size', 'Test', 'NASDAQ_Symbol', 'etf'], axis = 1)
     nasdaq_exchange_info=nasdaq_exchange_info[['name', 'symbol']].values.tolist()
     nasdaq_exchange_info_dict=dict(map(reversed, nasdaq_exchange_info))
+    print(nasdaq_exchange_info_dict)
     return mc.set("nasdaq_exchange_info", nasdaq_exchange_info), mc.set("nasdaq_exchange_info_dict", nasdaq_exchange_info_dict)
 
 
