@@ -19,7 +19,6 @@ from urllib.parse import urlparse
 import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-#from pytrading212 import *
 import random
 import yfinance.shared as shared
 import numpy as np
@@ -833,10 +832,6 @@ def test():
                 flash("Please enter a valid symbols (taken from Yahoo Finance)")
                 return redirect("/test")
             prices = df.copy()
-            #fig = px.line(prices, x=prices.index, y=prices.columns, title='Price Graph')
-            #fig = fig.update_xaxes(rangeslider_visible=True)
-            #fig.update_layout(width=1350, height=900)
-            #plot_json = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
             mu = pypfopt.expected_returns.capm_return(prices)
             returns = pypfopt.expected_returns.returns_from_prices(prices)
             returns = returns.dropna()
@@ -849,9 +844,6 @@ def test():
             perf2=es.portfolio_performance()
             weights = es.clean_weights()
             gamma=None
-            #for col in df.columns:
-                #if col.endswith(".L"):
-                    #df.loc[:,col] = df.loc[:,col]*GBPtoUSD()
             latest_prices2 = df.iloc[-1]  # prices as of the day you are allocating
             da = DiscreteAllocation(weights, latest_prices2, total_portfolio_value=10000)
             alloc2, leftover2 = da.lp_portfolio()
