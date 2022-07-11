@@ -26,13 +26,16 @@ from datetime import datetime
 app = Flask(__name__)
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-DATABASE_URI = os.environ['DATABASE_URI']
+DATABASE_URI = os.environ['DATABASE_URL']
 DATABASE_URI= DATABASE_URI[:8]+'ql' + DATABASE_URI[8:]
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
 app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_TYPE"] = "redis"
-url = urlparse(os.environ.get("REDIS_URL"))
+if 'HEROKU' in os.environ:
+    url = urlparse(os.environ.get("REDIS_TLS_URL"))
+else:
+    url = urlparse(os.environ.get("REDIS_URL"))
 app.config["SESSION_REDIS"]=redis.Redis(host=url.hostname, port=url.port, username=url.username, password=url.password, ssl=True, ssl_cert_reqs=None)
 
 db = SQLAlchemy(app)
