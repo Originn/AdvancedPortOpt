@@ -176,7 +176,6 @@ def index():
         cash = db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
         totalPortValue = 0
         totalprolos = 0
-        #print(nasdaq_exchange_info_dict)
 
         #building the index
         for stock in stocks:
@@ -196,7 +195,6 @@ def index():
         availableCash = cash
         grandTotal = availableCash + totalPortValue
         end = time.time()
-        print(end - start)
 
     return render_template("/index.html",availableCash=round(availableCash, 4), stocks=stocks, totalPortValue=totalPortValue, grandTotal=grandTotal, totalprolos=totalprolos)
 
@@ -262,7 +260,6 @@ def history():
         try:
             #get the earlist date of the history records
             edate=db.session.query(History.time).filter_by(user_id=session["user_id"]).order_by(History.time).first().time.strftime('%Y-%m-%d')
-            print(type(edate))
             #get the last date of the history records
             ldate=db.session.query(History.time).filter_by(user_id=session["user_id"]).order_by(desc(History.time)).first().time.strftime('%Y-%m-%d')
             return render_template("history.html", edate=edate, ldate=ldate)
@@ -329,7 +326,6 @@ def quote():
             flash("Must provide a symbol")
             return redirect("/quote")
         quote = lookup(request.form.get("symbol"))
-        print(quote)
         #if ticker does not exist
         try:
             if quote["symbol"] is None:
@@ -672,36 +668,32 @@ def build():
 @app.route("/allocation", methods=["POST"])
 @login_required
 def allocation():
-    if request.form.get('demo') == 'buy':
-        alloc=session['alloc']
-        latest_prices=session['latest_prices']
-        values = alloc.values()
-        total = sum(values)
-        for key, value in alloc.items():
-            price=latest_prices[key]
-            amount=value
-            availableCash=db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
-            sharesPrice = price * amount
-            if sharesPrice > availableCash:
-                flash("Not enough money to buy:", str(key))
-                return redirect ("/built")
+    alloc1=session['alloc']
+    latest_prices=session['latest_prices']
+    values = alloc.values()
+    total = sum(values)
 
-            else:
-                if ".L" in key:
-                    price=GBPtoUSD()*price
-                formatted_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                #insert new row in the database to record the purchase
-                new_history=History(session["user_id"], key, price, int(amount), formatted_date, 'purchase')
-                db.session.add(new_history)
-                new_record=Records(session["user_id"], key, int(amount), 'purchase', formatted_date, price, price*int(amount))
-                db.session.add(new_record)
-                Users.query.filter_by(id=session["user_id"]).update({'cash':availableCash-(amount*price)})
-                db.session.commit()
-    else:
-        #alloc=session['alloc']
-        #for key, value in alloc.items():
-        portfolio = trading212.get_portfolio_composition()
-        print(portfolio)
+    for key, value in alloc.items():
+        price=latest_prices[key]
+        amount=value
+        availableCash=db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
+        sharesPrice = price * amount
+        if sharesPrice > availableCash:
+            flash("Not enough money to buy:", str(key))
+            return redirect ("/built")
+
+        else:
+            if ".L" in key:
+                price=GBPtoUSD()*price
+            formatted_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            #insert new row in the database to record the purchase
+            new_history=History(session["user_id"], key, price, int(amount), formatted_date, 'purchase')
+            db.session.add(new_history)
+            new_record=Records(session["user_id"], key, int(amount), 'purchase', formatted_date, price, price*int(amount))
+            db.session.add(new_record)
+            Users.query.filter_by(id=session["user_id"]).update({'cash':availableCash-(amount*price)})
+            db.session.commit()
+
     return redirect("/")
 
 @app.route("/allocation1", methods=["GET", "POST"])
@@ -800,16 +792,12 @@ def test():
         else:
             nasdaq_exchange_info = pd.read_csv('otherlisted.txt', sep = '|')
             nasdaq_exchange_info = list(nasdaq_exchange_info['NASDAQ Symbol'])
-        #nasdaq_exchange_info=nasdaq_exchange_info['Symbol'].tolist()
-        #selected="AAPL MSFT A V TSLA GOOGL BA TEVA OXY AIG BABA TWTR"
         i=0
         for i in range(4):
             method='semi-variance'
             selected=random.sample(nasdaq_exchange_info, int(request.form.get("random")))
-            #print('selected:', selected)
             try:
                 df = yf.download(selected, start=request.form.get("start"), end=request.form.get("end"), auto_adjust = False, prepost = False, threads = True, proxy = None)["Adj Close"].dropna(axis=1, how='all').sort_values('Date')
-                print(datetime.today().strftime('%Y-%m-%d'))
                 #another download to check the time from last download to today in order to check if the target was reached in any of the days
                 dftest=yf.download(selected, start=request.form.get("end"), end=datetime.today().strftime('%Y-%m-%d'), auto_adjust = False, prepost = False, threads = True, proxy = None)["Adj Close"].dropna(axis=1, how='all').sort_values('Date')
                 failed=(list(shared._ERRORS.keys()))
@@ -843,23 +831,8 @@ def test():
             dftest=dftest.loc[:, dftest.columns.isin(list(alloc2.keys()))]
             #create a total value df where we can see the value of the portfolio on each day
             df1 = dftest.dot(pd.Series(alloc2))+leftover2
-            #checking if profits on the day reached the target yield
-            for index, row in df1.items():
-                if row >= (10000*1.15):
-                    print('Target reached on {}, and the value was {}'.format(index, row))
-                    profit_date=index
-                    target_profit=row-10000
-                    fail=False
-                    break
-                else:
-                    fail=True
-                    profit_date=None
-                    target_profit=None
-            if fail:
-                print("We didn't reach the target")
 
             max_profit_value=df1.max()-10000
-            print('max value was:', df1.max())
             totalprice=0
             totalnewprice=0
             #check what is the value of the stocks today
@@ -868,8 +841,8 @@ def test():
                 sharesPrice = price * int(value)
                 todayprice = price_lookup(key)
                 totalnewprice += todayprice*int(value)
-                #if ".L" in key:
-                    #price=GBPtoUSD()*price
+                if ".L" in key:
+                    price=GBPtoUSD()*price
                 totalprice += sharesPrice
             #what is thevalue of the portfolio today
             profitloss=totalnewprice-totalprice+leftover2
