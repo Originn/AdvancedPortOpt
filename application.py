@@ -26,8 +26,8 @@ from datetime import datetime
 app = Flask(__name__)
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-DATABASE_URI = os.environ['DATABASE_URL']
-#DATABASE_URI= DATABASE_URI[:8]+'ql' + DATABASE_URI[8:]
+DATABASE_URI = os.environ['DATABASE_URI']
+DATABASE_URI= DATABASE_URI[:8]+'ql' + DATABASE_URI[8:]
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
 app.config["SESSION_PERMANENT"] = False
