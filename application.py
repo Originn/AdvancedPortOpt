@@ -17,8 +17,6 @@ from pypfopt import EfficientFrontier
 from helpers import login_required, lookup, usd, gbp, GBPtoUSD, contains_multiple_words, symbol_search, price_lookup
 from urllib.parse import urlparse
 import time
-from selenium import webdriver
-from selenium.webdriver.common.by import By
 import random
 import yfinance.shared as shared
 import numpy as np
@@ -27,12 +25,6 @@ from datetime import datetime
 # Configure application
 app = Flask(__name__)
 
-#setting options for webdriver
-chrome_options = webdriver.ChromeOptions()
-chrome_options.add_argument("no-sandbox")
-chrome_options.add_argument("--disable-extensions")
-chrome_options.add_argument("--headless")
-
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 DATABASE_URI = os.environ['DATABASE_URL']
 DATABASE_URI= DATABASE_URI[:8]+'ql' + DATABASE_URI[8:]
@@ -40,10 +32,7 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
 app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_TYPE"] = "redis"
-if 'HEROKU' in os.environ:
-    url = urlparse(os.environ.get("REDIS_TLS_URL"))
-else:
-    url = urlparse(os.environ.get("REDIS_URL"))
+url = urlparse(os.environ.get("REDIS_URL"))
 app.config["SESSION_REDIS"]=redis.Redis(host=url.hostname, port=url.port, username=url.username, password=url.password, ssl=True, ssl_cert_reqs=None)
 
 db = SQLAlchemy(app)
