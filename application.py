@@ -228,7 +228,7 @@ def buy():
                 flash("Not enough money")
                 return redirect ("/buy")
             else:
-                formatted_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                formatted_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 #insert new row in the database to record the purchase
                 new_history=History(session["user_id"], symbol, price, request.form.get("shares"), formatted_date, 'purchase')
                 db.session.add(new_history)
@@ -422,7 +422,7 @@ def sell():
                 price=GBPtoUSD()*price
             moneyBack = NumOfshareToSell*price
             #setting up the time stamp to enter the sell into transaction table
-            formatted_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            formatted_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             #entering the sale into history table
             new_history=History(session["user_id"], request.form.get("symbol"), price, int(request.form.get("shares")), formatted_date, 'sell')
             db.session.add(new_history)
@@ -685,7 +685,7 @@ def allocation():
         else:
             if ".L" in key:
                 price=GBPtoUSD()*price
-            formatted_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            formatted_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             #insert new row in the database to record the purchase
             new_history=History(session["user_id"], key, price, int(amount), formatted_date, 'purchase')
             db.session.add(new_history)
@@ -716,7 +716,7 @@ def allocation1():
         else:
             if ".L" in key:
                 price=GBPtoUSD()*price
-            formatted_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            formatted_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             #insert new row in the database to record the purchase
             new_history=History(session["user_id"], key, price, int(amount), formatted_date, 'purchase')
             db.session.add(new_history)
@@ -746,7 +746,7 @@ def allocation2():
         else:
             if ".L" in key:
                 price=GBPtoUSD()*price
-            formatted_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            formatted_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             #insert new row in the database to record the purchase
             new_history=History(session["user_id"], key, price, int(amount), formatted_date, 'purchase')
             db.session.add(new_history)
@@ -769,7 +769,7 @@ def sell_all():
             price=GBPtoUSD()*price
         moneyBack = (int(stock.number_of_shares))*price
         #setting up the time stamp to enter the sell into transaction table
-        formatted_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        formatted_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         #entering the sale into history table
         new_history=History(session["user_id"], stock.symbol, price, stock.number_of_shares, formatted_date, 'sell')
         db.session.add(new_history)
