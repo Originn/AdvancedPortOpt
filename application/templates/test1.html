@@ -1,0 +1,30 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    test1
+{% endblock %}
+
+{% block main %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+<div class="alert1">
+  <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span>
+  The following symbols have been removed due to low quality data: {{ listofna }}
+</div>
+
+<div class="alert1">
+  <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span>
+  The profit/loss is: {{ profitloss }}
+</div>
+
+<div align="left"; class="child"; id="plotly-timeseries"></div>
+<script>
+var graph = {{ plot_json | safe }};
+Plotly.plot('plotly-timeseries', graph, {});
+</script>
+
+<div>
+  <h3>The allocation is: {{ alloc2 | safe }}</h3>
+</div>
+
+{% endblock %}

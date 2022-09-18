@@ -1,0 +1,63 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Index
+{% endblock %}
+
+{% block main %}
+<div>
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Symbol</th>
+      <th>Name</th>
+      <th>Total Shares</th>
+      <th>Purchase Price</th>
+      <th>Current Price</th>
+      <th>Percent Change</th>
+      <th>Profit/Loss</th>
+      <th>Total</th>
+    </tr>
+    </thead>
+  {% for stock in stocks %}
+    <tbody>
+      <tr>
+        <td>{{ stock["symbol"] }}</td>
+        <td>{{ stock["name"] }}</td>
+        <td>{{ stock["sumshares"] }}</td>
+        <td>{{ stock["purchase_p"] | usd }}</td>
+        <td>{{ stock["ap"] | usd }}</td>
+        {% if stock["perc_change"] > 0 %}
+          <td style="color:green;">&#x25B2;{{ stock['perc_change'] }}%</td>
+          <td style="color:green;">{{ stock['prolos'] | usd }}</td>
+        {% elif stock['perc_change'] < 0 %}
+          <td style="color:red;">&#x25BC;{{ stock['perc_change'] }}%</td>
+          <td style="color:red;">{{ stock['prolos'] | usd }}</td>
+        {% else %}
+          <td style="color:gray;">{{ stock['perc_change'] }}%</td>
+          <td style="color:gray;">{{ 0.00 | usd }}</td>
+        {% endif  %}
+        <td>{{ stock['total'] | usd }}</td>
+      </tr>
+    </tbody>
+  {% endfor %}
+</table>
+  <div style=padding-bottom:20px>
+      <h4>Cash: {{ availableCash | usd }}</h4>
+  </div>
+  <div style=padding-bottom:20px>
+    <h4>Total Value: {{ grandTotal | usd }}</h4>
+  </div>
+  <div>
+    {% if totalprolos > 0 %}
+      <h4 class="inline">Total Profit/Loss:</h4>
+      <h4 class="inline" style="color:green;">&#x25B2;{{ totalprolos | usd }}</h4>
+    {% elif totalprolos < 0 %}
+      <h4 class="inline">Total Profit/Loss:</h4>
+      <h4 class="inline" style="color:red;">&#x25BC;{{ totalprolos | usd }}</h4>
+    {% else %}
+      <h4 class="inline">Total Profit/Loss:</h4>
+      <h4 class="inline" style="color:gray;">{{ totalprolos | usd }}</h4>
+    {% endif %}
+  </div>
+{% endblock %}

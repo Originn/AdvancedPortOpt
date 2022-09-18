@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Log In
+{% endblock %}
+
+{% block main %}
+<div class="container">
+  <ul class="responsive-table">
+    <li class="table-header">
+      <div class="col col-2">Symbol</div>
+      <div class="col col-3">Price</div>
+      <div class="col col-4">Number of Shares</div>
+      <div class="col col-1">Status</div>
+      <div class="col col-5">Time</div>
+    </li>
+  {% for his in hist %}
+    <li class="table-row">
+      <div class="col col-2" data-label="Nymbol">{{ his["symbol"] }}</div>
+      <div class="col col-3" data-label="Price">{{ his["price"] | usd }}</div>
+      <div class="col col-4" data-label="Number of Shares">{{ his["number_of_shares"] }}</div>
+      <div class="col col-1" data-label="Status">{{ his["status"] }}</div>
+      <div class="col col-5" data-label="Time">{{ his["time"] }}</div>
+    </li>
+  {% endfor %}
+  </ul>
+</div>
+{% endblock %}

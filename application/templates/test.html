@@ -1,0 +1,50 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Test
+{% endblock %}
+
+{% block main %}
+<form action="/test" method="post">
+<h3>Please enter the time range to pull data from</h3>
+        <div class="form-group">
+            <input autocomplete="off" value="2020-04-18" class="form-control" name="start" placeholder="start" type="date">
+            <input autocomplete="off" id="today" value="2021-04-18"class="form-control" name="end" placeholder="end" type="date">
+        </div>
+
+<h3>Please select the stock database to choose from</h3>
+<div class="form-group">
+<select name="data">
+    <option value="sp500">S&P500</option>
+    <option value="nasdaq">NASDAQ</option>
+    <option value="other">OTHER</option>
+</select>
+</div>
+
+<h3>Please select the gamma value</h3>
+<div class="form-group">
+    <input autocomplete="off" value="0.1" class="form-control" name="gamma" placeholder="gamma" type="number" step=".1" min="0" max="10">
+</div>
+
+<h3>Please select the number of random stocks to choose from</h3>
+        <div class="form-group">
+            <input autocomplete="off" value="25" class="form-control" name="random" placeholder="random" type="number" min="5">
+        </div>
+<button onClick="this.form.submit(); this.disabled=true; this.value='Sending…'; " class="btn btn-primary" type="submit">Test</button>
+</form>
+<script>
+function nextY() {
+  Calendar cal = Calendar.getInstance();
+  Date today = cal.getTime();
+  cal.add(Calendar.YEAR, -1); // to get previous year add -1
+  Date nextYear = cal.getTime();
+}
+document.querySelector("#today").valueAsDate = Date nextY();
+
+</script>
+<div align="left"; class="child"; id="plotly-timeseries"></div>
+<script>
+var graph = {{ plot_json | safe }};
+Plotly.plot('plotly-timeseries', graph, {});
+</script>
+{% endblock %}
