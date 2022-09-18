@@ -4,7 +4,7 @@ from helpers import login_required
 from werkzeug.exceptions import default_exceptions, HTTPException, InternalServerError
 from flask import Flask, flash, redirect, render_template, request, session
 from flask_sqlalchemy import SQLAlchemy
-import re, datetime, time, bmemcached, os, dash, json, plotly
+import re, datetime, time, bmemcached, os, json, plotly
 from werkzeug.security import check_password_hash, generate_password_hash
 import pandas as pd
 import plotly.graph_objects as go
@@ -14,13 +14,6 @@ from helpers import price_lookup, clean_header, usd, GBPtoUSD, contains_multiple
 import yfinance as yf
 from datetime import datetime
 from flask_session import Session
-import dash
-from dash import dcc
-from dash import html
-from dash.dependencies import Output, Input
-import dash_bootstrap_components as dbc
-from dash import dash_table
-from .dashboard.dashboard import init_dashboard
 from models import db, Records, Users, History, Build, Test
 import random
 import yfinance.shared as shared
@@ -335,8 +328,6 @@ def sell():
             number_of_items=len(share_data)
             #selling FIFO method first in first out
             for i in range(number_of_items):
-                print(share_data[0][1])
-                input()
                 if NumOfshareToSell < share_data[0][1]:
                     history = db.session.query(History.symbol, History.status, History.number_of_shares, History.cml_cost, History.cml_units, History.avg_price).filter_by(user_id=session["user_id"]).all()
                     history = pd.DataFrame(history)
@@ -346,11 +337,8 @@ def sell():
                     cml_units = history.query('symbol==@symbolToSell').iloc[-1,4] - NumOfshareToSell
                     cost_unit = history.query('symbol==@symbolToSell').iloc[-1,-1]
                     cost_transact = cost_unit*NumOfshareToSell
-                    print(cml_units)
                     cml_cost = history.query('symbol == @symbolToSell').iloc[-1,3] - cost_transact
                     avg_price = cml_cost/cml_units
-                    print(cml_cost)
-                    input()
                     moneyBack = price*NumOfshareToSell
                     gain_loss = price*NumOfshareToSell - share_data[0][3]*NumOfshareToSell
                     formatted_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')

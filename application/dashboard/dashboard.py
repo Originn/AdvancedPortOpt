@@ -23,7 +23,6 @@ from dash.dependencies import Input, Output
 def init_dashboard(server):
     try:
         user = session.get("user_name")
-        print(user)
     except:
         user = 'Random'
     """Create a Plotly Dash dashboard."""
@@ -180,29 +179,9 @@ def init_dashboard(server):
         donut_top.update_layout(showlegend=False)
         donut_top.update_layout(margin = dict(t=50, b=50, l=25, r=25))
 
-        if '_dashapp_dash_assets' in app.blueprints.keys():
-            del app.blueprints["_dashapp_dash_assets"]
-            rule_list=['_dashapp_dash_assets.static', '/dashapp/_dash-component-suites/<string:package_name>/<path:fingerprinted_path>', '/dashapp/_dash-layout'
-            ,'/dashapp/_dash-dependencies', '/dashapp/_dash-update-component', '/dashapp/_reload-hash', '/dashapp/', '/dashapp/<path:path>']
-
-            for r in rule_list:
-                for rule in app.url_map.iter_rules(r):
-                    app.url_map._rules.remove(rule)
-                    app.url_map._rules_by_endpoint[r] = []
-                    app.view_functions[r] = None
-
-            app.url_map.update()
-
-        else:
-            pass
     else:
         all_transactions=pd.DataFrame(history)
-        print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-        print(all_transactions)
         all_tickers = set(list(stock['symbol'] for stock in history))
-        print(all_tickers)
-        #transactions_grouped=all_transactions.groupby("symbol").agg({'number_of_shares' : 'sum', 'purchase_p' : 'mean', })
-        #print(transactions_grouped)
         today = datetime.today().date()
         end_stocks = today
         start_stocks = all_transactions.time.min().date()
@@ -218,7 +197,6 @@ def init_dashboard(server):
 
         all_data = get(all_tickers, start_stocks, end_stocks)
         all_data = all_data.drop_duplicates()
-        print('pdr:', all_data)
         MEGA_DICT = {}
         min_date = min(stock['time'] for stock in history).strftime('%Y-%m-%d')
         min_date=datetime.strptime(min_date, '%Y-%m-%d')
@@ -269,8 +247,6 @@ def init_dashboard(server):
         new_row = web.get_data_yahoo('^GSPC', period='1m')
         sp500= pd.concat([sp500, new_row])
         clean_header(sp500)
-        print(sp500)
-
 
         #getting the pct change
         portf_allvalues = portf_allvalues.join(sp500[['adj_close', 'open']], how='outer')
@@ -280,8 +256,6 @@ def init_dashboard(server):
         portf_allvalues['sp500_pctch'] = (portf_allvalues['sp500_mktvalue'].pct_change()*100).round(2)
         portf_allvalues['ptf_value_diff'] = (portf_allvalues['portf_value'].diff()).round(2)
         portf_allvalues['sp500_diff'] = (portf_allvalues['sp500_mktvalue'].diff()).round(2)
-        print('£££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££')
-        print(portf_allvalues.tail(20)[['sp500_mktvalue', 'open']])
 
         # KPI's for S&P500
 
@@ -306,12 +280,8 @@ def init_dashboard(server):
         all_transactions_mod = all_transactions_mod.groupby('date')['cml_cost'].sum()
         plotlydf_portfval = pd.merge(plotlydf_portfval, all_transactions_mod, on='date', how='left')
         plotlydf_portfval['cml_cost'] = plotlydf_portfval['cml_cost'].fillna(0).cumsum()
-        print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-        print(plotlydf_portfval)
         plotlydf_portfval['ptf_growth_wo_purchases'] = plotlydf_portfval['portf_value'] - plotlydf_portfval['cml_cost']
         plotlydf_portfval['ptf_value_pctch_wo_purchases'] = ((plotlydf_portfval['ptf_growth_wo_purchases']/plotlydf_portfval['portf_value'])*100).round(2)
-        print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-        print(plotlydf_portfval)
 
 
         if math.isnan(plotlydf_portfval.iloc[-1]['sp500_growth']) == True:
@@ -409,8 +379,7 @@ def init_dashboard(server):
         df['year'] = df.date.dt.year
         df['weeknumber'] = df.date.dt.week    # could be interesting to try instead of timeperiod
         df['timeperiod'] = df.month.astype(str) + ' - ' + df.date.dt.day.astype(str).str.zfill(2)
-        print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-        print(df)
+
 
         # getting the percentage change for each period. the first period will be NaN
         sp = (df.reset_index().groupby('timeperiod').last()['sp500_growth'].pct_change()*100).round(2)
@@ -558,7 +527,6 @@ def init_dashboard(server):
         last_positions['current_value'] = (last_positions.price * last_positions.cml_units).round(2)
         last_positions['avg_price'] = (last_positions.cml_cost / last_positions.cml_units).round(2)
         last_positions = last_positions.sort_values(by='current_value', ascending=False)
-        print(last_positions)
 
         donut_top = go.Figure()
         donut_top.layout.template = CHART_THEME
@@ -575,7 +543,7 @@ def init_dashboard(server):
     [
         dcc.Loading([
             dbc.Row(dbc.Col(html.H2('PORTFOLIO OVERVIEW', className='text-center text-primary, mb-3'))),  # header row
-            dbc.Row(dbc.Col(html.H2(f'Hello {user}', className='text-center text-primary, mb-3', id='greet'))),
+            dbc.Row(dbc.Col(html.H4(f'Hello {user}', className='text-center text-primary, mb-3', id='greet'))),
             dbc.Row([  # start of second row
                 dbc.Col([  # first column on second row
                 html.H5('Total Portfolio Value ($USD)', className='text-center'),
@@ -629,12 +597,7 @@ def init_dashboard(server):
             user = session.get('user_name')
             history = db.session.query(History.symbol, History.cml_units, History.price, History.time, History.gain_loss, History.cml_cost, History.cash_flow, History.avg_price).filter_by(user_id=session["user_id"]).all()
             all_transactions=pd.DataFrame(history)
-            print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-            print(all_transactions)
             all_tickers = set(list(stock['symbol'] for stock in history))
-            print(all_tickers)
-            #transactions_grouped=all_transactions.groupby("symbol").agg({'number_of_shares' : 'sum', 'purchase_p' : 'mean', })
-            #print(transactions_grouped)
             today = datetime.today().date()
             end_stocks = today
             start_stocks = all_transactions.time.min().date()
@@ -650,7 +613,6 @@ def init_dashboard(server):
 
             all_data = get(all_tickers, start_stocks, end_stocks)
             all_data = all_data.drop_duplicates()
-            print('pdr:', all_data)
             MEGA_DICT = {}
             min_date = min(stock['time'] for stock in history).strftime('%Y-%m-%d')
             min_date=datetime.strptime(min_date, '%Y-%m-%d')
@@ -701,7 +663,6 @@ def init_dashboard(server):
             new_row = web.get_data_yahoo('^GSPC', period='1m')
             sp500= pd.concat([sp500, new_row])
             clean_header(sp500)
-            print(sp500)
 
 
             #getting the pct change
@@ -712,8 +673,6 @@ def init_dashboard(server):
             portf_allvalues['sp500_pctch'] = (portf_allvalues['sp500_mktvalue'].pct_change()*100).round(2)
             portf_allvalues['ptf_value_diff'] = (portf_allvalues['portf_value'].diff()).round(2)
             portf_allvalues['sp500_diff'] = (portf_allvalues['sp500_mktvalue'].diff()).round(2)
-            print('£££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££')
-            print(portf_allvalues.tail(20)[['sp500_mktvalue', 'open']])
 
             # KPI's for S&P500
 
@@ -738,12 +697,8 @@ def init_dashboard(server):
             all_transactions_mod = all_transactions_mod.groupby('date')['cml_cost'].sum()
             plotlydf_portfval = pd.merge(plotlydf_portfval, all_transactions_mod, on='date', how='left')
             plotlydf_portfval['cml_cost'] = plotlydf_portfval['cml_cost'].fillna(0).cumsum()
-            print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-            print(plotlydf_portfval)
             plotlydf_portfval['ptf_growth_wo_purchases'] = plotlydf_portfval['portf_value'] - plotlydf_portfval['cml_cost']
             plotlydf_portfval['ptf_value_pctch_wo_purchases'] = ((plotlydf_portfval['ptf_growth_wo_purchases']/plotlydf_portfval['portf_value'])*100).round(2)
-            print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-            print(plotlydf_portfval)
 
 
             if math.isnan(plotlydf_portfval.iloc[-1]['sp500_growth']) == True:
@@ -841,8 +796,6 @@ def init_dashboard(server):
             df['year'] = df.date.dt.year
             df['weeknumber'] = df.date.dt.week    # could be interesting to try instead of timeperiod
             df['timeperiod'] = df.month.astype(str) + ' - ' + df.date.dt.day.astype(str).str.zfill(2)
-            print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-            print(df)
 
             # getting the percentage change for each period. the first period will be NaN
             sp = (df.reset_index().groupby('timeperiod').last()['sp500_growth'].pct_change()*100).round(2)
@@ -982,7 +935,6 @@ def init_dashboard(server):
             last_positions['current_value'] = (last_positions.price * last_positions.cml_units).round(2)
             last_positions['avg_price'] = (last_positions.cml_cost / last_positions.cml_units).round(2)
             last_positions = last_positions.sort_values(by='current_value', ascending=False)
-            print(last_positions)
 
             donut_top = go.Figure()
             donut_top.layout.template = CHART_THEME
@@ -992,7 +944,7 @@ def init_dashboard(server):
             donut_top.update_layout(showlegend=False)
             donut_top.update_layout(margin = dict(t=50, b=50, l=25, r=25))
 
-            return dbc.Col(html.H2(f'Welcome back, {user}', className='text-center text-primary, mb-3', id='greet')), chart_ptfvalue, indicators_ptf, fig_growth2, donut_top
+            return dbc.Col(html.H4(f'Welcome back, {user}', className='text-center text-primary, mb-3', id='greet')), chart_ptfvalue, indicators_ptf, fig_growth2, donut_top
 
 
     return dash_app.server
