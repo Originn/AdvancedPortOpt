@@ -152,7 +152,7 @@ scheduler.add_job(
     trigger="cron",
     max_instances=1,
     day_of_week='mon-fri',
-    hour=05,
+    hour=5,
     minute=15,
 )
 scheduler.start()
