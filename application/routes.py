@@ -9,19 +9,18 @@ from werkzeug.security import check_password_hash, generate_password_hash
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
-from sqlalchemy import func
+from sqlalchemy import func, cast, Date, desc
 from helpers import price_lookup, clean_header, usd, GBPtoUSD, contains_multiple_words
 import yfinance as yf
 from datetime import datetime
 from flask_session import Session
-from models import db, Records, Users, History, Build, Test
+from models import db, Records, Users, History, Build, Test, Stocks
 import random
 import yfinance.shared as shared
 import numpy as np
 import pypfopt
 from pypfopt import risk_models, DiscreteAllocation, objective_functions, EfficientSemivariance, efficient_frontier, EfficientFrontier
 from pypfopt import EfficientFrontier
-from sqlalchemy import desc
 
 
 yf.pdr_override()
@@ -47,6 +46,8 @@ mc.enable_retry_delay(True)
 
 nasdaq_exchange_info_dict=mc.get("nasdaq_exchange_info_dict")
 nasdaq_exchange_info = mc.get("nasdaq_exchange_info")
+users_stocks = [[sn, s] for sn, s in db.session.query(Stocks.shortname, Stocks.symbol)]
+nasdaq_exchange_info.extend(users_stocks)
 
 Session(app)
 #app = init_dashboard(app)
@@ -417,6 +418,19 @@ def build():
         except ValueError:
             flash("Please enter a valid symbols (taken from Yahoo Finance)")
             return redirect("/build")
+        global nasdaq_exchange_info
+        for col in df.columns:
+            col=col.upper()
+            if any(sublist[1]==col in sublist for sublist in nasdaq_exchange_info) is False:
+                col_sn = yf.Ticker(col).stats()["price"].get('longName')
+                col_list=[col, col_sn]
+                new_stocks=Stocks(col, col_sn)
+                db.session.add(new_stocks)
+                db.session.commit()
+                users_stocks = [[sn, s] for sn, s in db.session.query(Stocks.shortname, Stocks.symbol)]
+                nasdaq_exchange_info.extend(users_stocks)
+
+        print(yf.Ticker("TSLA").splits)
         prices = df.copy()
         fig = px.line(prices, x=prices.index, y=prices.columns, title='Price Graph')
         fig = fig.update_xaxes(rangeslider_visible=True)
@@ -603,53 +617,7 @@ def build():
         else:
             cached_symbols=''
         availableCash=db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
-        nasdaq_exchange_info=mc.get("nasdaq_exchange_info")
         return render_template("build.html", availableCash=round(availableCash, 4), GBP=GBPtoUSD(), nasdaq_exchange_info=nasdaq_exchange_info, cached_symbols=cached_symbols)
-
-# another method for allocation, although not very reliable
-
-# @app.route("/allocation", methods=["POST"])
-# @login_required
-# def allocation():
-#     alloc1=session['alloc']
-#
-#     for key, value in alloc.items():
-#         price=price_lookup(key)
-#         amount=value
-#         availableCash=db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
-#         sharesPrice = price * amount
-#         if sharesPrice > availableCash:
-#             flash("Not enough money to buy:", str(key))
-#             return redirect ("/built")
-#
-#         else:
-#             if ".L" in key:
-#                 price=GBPtoUSD()*price
-#             formatted_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-#             #insert new row in the database to record the purchase
-#             history = db.session.query(History.symbol, History.number_of_shares, History.cml_cost, History.cml_units).filter_by(user_id=session["user_id"]).all()
-#             history = pd.DataFrame(history)
-#             try:
-#                 cml_units = history.query('symbol==@key').iloc[-1,-1] + amount
-#             except:
-#                 cml_units = amount
-#             try:
-#                 cml_cost = history[history['symbol']==key].tail(1).reset_index().loc[0, 'cml_cost'] + sharesPrice
-#             except:
-#                 cml_cost = sharesPrice
-#             cost_unit = 0
-#             cost_transact = 0
-#             avg_price = cml_cost/cml_units
-#
-#             new_history=History(session["user_id"], key, price, int(amount), formatted_date, 'purchase', 0, round(cml_cost, 2), round(-(sharesPrice), 2), round(avg_price, 2), cost_unit, round(cost_transact, 2), int(cml_units))
-#             db.session.add(new_history)
-#             new_record=Records(session["user_id"], key, int(amount), 'purchase', price, price*int(amount), formatted_date)
-#             db.session.add(new_record)
-#             Users.query.filter_by(id=session["user_id"]).update({'cash':availableCash-(amount*price)})
-#
-#     db.session.commit()
-#
-#     return redirect("/")
 
 @app.route("/allocation1", methods=["GET", "POST"])
 @login_required

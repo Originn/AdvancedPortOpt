@@ -7,6 +7,8 @@ from functools import wraps
 from io import BytesIO
 from ftplib import FTP
 from apscheduler.schedulers.background import BackgroundScheduler
+from flask import current_app as app
+
 
 #set memcache in Heroku
 servers = os.environ.get('MEMCACHIER_SERVERS', '').split(',')
@@ -117,6 +119,22 @@ def symbol_search():
     nasdaq_exchange_info_dict=dict(map(reversed, nasdaq_exchange_info))
     return mc.set("nasdaq_exchange_info", nasdaq_exchange_info), mc.set("nasdaq_exchange_info_dict", nasdaq_exchange_info_dict)
 
+app1=app._get_current_object()
+def stock_splits_update(*args):
+    with app1.app_context():
+        from models import db, Records
+        from sqlalchemy import func, cast, Date
+        stocks=[[s, et, ls] for s, et, ls in db.session.query(Records.symbol, func.to_char(Records.execution_time.cast(Date), 'yyyy-mm-dd'), Records.last_split).distinct().all()]
+        for stock, date, ls in stocks:
+            splits=yf.Ticker(stock).splits
+            last_split_amount=splits.tail(1)[0]
+            last_split_date=splits.tail(1).index[0].strftime('%Y-%m-%d')
+            if ls is None:
+                db.session.query(Records).filter(Records.symbol==stock).update({'last_split':last_split_date})
+            elif ls < last_split_date:
+                db.session.query(Records).filter(Records.symbol==stock).update({'last_split':last_split_date})
+                db.session.query(Records).filter(Records.symbol==stock, func.to_char(Records.execution_time.cast(Date), 'yyyy-mm-dd')<last_split_date).update({'number_of_shares': Records.number_of_shares*last_split_amount, 'purchase_p': Records.purchase_p/last_split_amount}, synchronize_session='fetch')
+            db.session.commit()
 
 scheduler = BackgroundScheduler(timezone="Europe/London")
 # Runs from Monday to Friday at 5:30 (am)
@@ -127,5 +145,14 @@ scheduler.add_job(
     day_of_week='mon-fri',
     hour=5,
     minute=30,
+)
+
+scheduler.add_job(
+    func=stock_splits_update,
+    trigger="cron",
+    max_instances=1,
+    day_of_week='mon-fri',
+    hour=05,
+    minute=15,
 )
 scheduler.start()

@@ -698,7 +698,7 @@ def init_dashboard(server):
             plotlydf_portfval = pd.merge(plotlydf_portfval, all_transactions_mod, on='date', how='left')
             plotlydf_portfval['cml_cost'] = plotlydf_portfval['cml_cost'].fillna(0).cumsum()
             plotlydf_portfval['ptf_growth_wo_purchases'] = plotlydf_portfval['portf_value'] - plotlydf_portfval['cml_cost']
-            plotlydf_portfval['ptf_value_pctch_wo_purchases'] = ((plotlydf_portfval['ptf_growth_wo_purchases']/plotlydf_portfval['portf_value'])*100).round(2)
+            plotlydf_portfval['ptf_value_pctch_wo_purchases'] = (((plotlydf_portfval['ptf_growth_wo_purchases']/plotlydf_portfval['portf_value'])*100).diff()).round(2)
 
 
             if math.isnan(plotlydf_portfval.iloc[-1]['sp500_growth']) == True:

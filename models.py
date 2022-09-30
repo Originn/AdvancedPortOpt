@@ -11,6 +11,7 @@ class Records(db.Model):
     user_id=db.Column(db.Integer, primary_key=True)
     price=db.Column(db.Float)
     execution_time=db.Column(db.DateTime)
+    last_split=db.Column(db.Text)
 
     def __init__(self, user_id, symbol, number_of_shares, transaction_type, purchase_p, price, execution_time):
         self.user_id = user_id
@@ -20,6 +21,7 @@ class Records(db.Model):
         self.purchase_p = purchase_p
         self.price = price
         self.execution_time = execution_time
+        self.last_split = last_split
 
 class History(db.Model):
     status = db.Column(db.Text)
@@ -107,3 +109,11 @@ class Test(db.Model):
         self.max_profit_value=max_profit_value
         self.target_profit=target_profit
         self.gamma=gamma
+
+class Stocks(db.Model):
+    symbol = db.Column(db.Text, primary_key=True)
+    shortname = db.Column(db.Text)
+
+    def __init__(self, symbol, shortname):
+        self.symbol = symbol
+        self.shortname = shortname
