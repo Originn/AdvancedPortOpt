@@ -10,7 +10,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from sqlalchemy import func, cast, Date, desc
-from helpers import price_lookup, clean_header, usd, GBPtoUSD, contains_multiple_words
+from helpers import price_lookup, clean_header, usd, GBPtoUSD, contains_multiple_words, lookup
 import yfinance as yf
 from datetime import datetime
 from flask_session import Session
