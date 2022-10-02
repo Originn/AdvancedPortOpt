@@ -40,31 +40,6 @@ var graph = {{ plot_json2 | safe }};
 Plotly.plot('plotly-timeseries2', graph, {});
 </script>
 
-<!--<h4>Return estimate using the Capital Asset Pricing Model</h4>
-<div id="plotly-timeseries3"></div>
-<script>
-var graph = {{ plot_json3 | safe }};
-Plotly.plot('plotly-timeseries3', graph, {});
-</script>
-
-<h4>Long/short min</h4>
-<p>In this section, we construct a long/short portfolio with the objective of minimising variance.</p>
-<div id="plotly-timeseries4"></div>
-<script>
-var graph = {{ plot_json4 | safe }};
-Plotly.plot('plotly-timeseries4', graph, {});
-</script>
-<p>Expected Annual volatility: {{ "%.2f" | format(av) }}%</p>
-<div class="alert alert-success" role="alert">
-  <h4>If you happy with the suggested portfolio, the following output will show how many stocks to buy and the leftover funds</h4>
-  <p style="color:red;">Please note that the symbols prices may change between the time it takes to choose your portfolio</p>
-  <P>{{ alloc }}</P>
-  <p>{{ "$%.2f" | format(leftover) }} leftover</p>
-  <form action="/allocation" onsubmit="myFunction()" method="post">
-    <input type="submit" name="demo" class="btn btn-primary" onclick="this.form.submit()" id="btn1" value="Buy">
-    <input type="submit" name="212demo" class="btn btn-primary" onclick="this.form.submit()" id="btn4" value="212demo">
-  </form>
-</div>-->
 
 <h4>Maximise return for a given risk  ({{ volatility }}%), with L2 regularisation = ({{ gamma }})</h4>
 <div id="plotly-timeseries5"></div>

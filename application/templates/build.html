@@ -7,7 +7,8 @@
 {% block main %}
 
 <form action="/build" method="post">
-<h3> Enter company name and choose from the list</h3>
+<h3> Enter company name and choose from the dropdown </h3>
+<h5> Symbols taken from Yahoo finance can be also added manually. After adding it once, the symbol will appear in the list. </h5>
 <p>(note that GBP stocks are converted to USD, currently only US and UK stocks are compatible with conversion. The current rate is ${{ GBP }} to £1)</p>
 <div class="autocomplete" style="width:300px;">
   <input id="myInput" type="text" name="stock" placeholder="Company Name">
@@ -20,15 +21,6 @@
             <input autocomplete="off" value="2015-01-01" class="form-control" name="start" placeholder="start" type="date">
             <input autocomplete="off" id="today" class="form-control" name="end" placeholder="end" type="date">
         </div>
-
-<!--<h3>Please select the method of analysis</h3>
-<div class="form-group">
-<select name="data">
-    <option value="min_variance">Long/short min variance</option>
-    <option value="nasdaq">NASDAQ</option>
-    <option value="other">OTHER</option>
-</select>
-</div>--> 
 
 <h3>Please enter the amount to be invested</h3>
         <div class="form-group">
