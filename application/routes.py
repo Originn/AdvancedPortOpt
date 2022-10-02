@@ -428,8 +428,7 @@ def build():
                 db.session.add(new_stocks)
                 db.session.commit()
                 nasdaq_exchange_info.extend(new_stocks)
-
-        print(yf.Ticker("TSLA").splits)
+                
         prices = df.copy()
         fig = px.line(prices, x=prices.index, y=prices.columns, title='Price Graph')
         fig = fig.update_xaxes(rangeslider_visible=True)

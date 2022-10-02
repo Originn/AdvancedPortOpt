@@ -286,7 +286,7 @@ def init_dashboard(server):
         plotlydf_portfval['cml_cost'] = plotlydf_portfval['cml_cost'].fillna(0).cumsum()
         plotlydf_portfval['ptf_growth_wo_purchases'] = plotlydf_portfval['portf_value'] - plotlydf_portfval['cml_cost']
         plotlydf_portfval['ptf_value_pctch_wo_purchases'] = ((plotlydf_portfval['ptf_growth_wo_purchases']/plotlydf_portfval['portf_value'])*100).round(2)
-        print(plotlydf_portfval)
+
 
 
         if math.isnan(plotlydf_portfval.iloc[-1]['sp500_growth']) == True:
@@ -758,7 +758,6 @@ def init_dashboard(server):
             all_transactions=pd.DataFrame(history)
             all_records = pd.DataFrame(records)
             all_transactions=all_transactions.loc[all_transactions['symbol'].isin(all_records['symbol']) & all_transactions['time'].isin(all_records['execution_time'])]
-            print(all_transactions)
             all_tickers = set(list(stock for stock in all_transactions['symbol']))
             today = datetime.today().date()
             end_stocks = today
@@ -844,7 +843,6 @@ def init_dashboard(server):
             kpi_sp500_30d_pct = ((portf_allvalues.sp500_mktvalue.iloc[-1] - portf_allvalues.tail(30).open.iloc[0])/portf_allvalues.tail(30).open.iloc[0]).round(4)*100
             kpi_sp500_200d_pct = ((portf_allvalues.sp500_mktvalue.iloc[-1] - portf_allvalues.tail(200).open.iloc[0])/portf_allvalues.tail(200).open.iloc[0]).round(4)*100
 
-            print(portf_allvalues)
             initial_date = min_date  # do not use anything earlier than your first trade
             plotlydf_portfval = portf_allvalues[portf_allvalues.index >= initial_date]
             plotlydf_portfval = plotlydf_portfval[['portf_value', 'sp500_mktvalue', 'ptf_value_pctch', 'sp500_pctch', 'ptf_value_diff', 'sp500_diff']].reset_index().round(2)
@@ -862,7 +860,6 @@ def init_dashboard(server):
             plotlydf_portfval['cml_cost'] = plotlydf_portfval['cml_cost'].fillna(0).cumsum()
             plotlydf_portfval['ptf_growth_wo_purchases'] = plotlydf_portfval['portf_value'] - plotlydf_portfval['cml_cost']
             plotlydf_portfval['ptf_value_pctch_wo_purchases'] = (((plotlydf_portfval['ptf_growth_wo_purchases']/plotlydf_portfval['portf_value'])*100).diff()).round(2)
-            print(plotlydf_portfval)
 
             if math.isnan(plotlydf_portfval.iloc[-1]['sp500_growth']) == True:
                 plotlydf_portfval = plotlydf_portfval[:-1]
