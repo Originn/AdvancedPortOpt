@@ -147,7 +147,7 @@ def buy():
                 db.session.commit()
                 return redirect("/")
     else:
-        nasdaq_exchange_info = mc.get("nasdaq_exchange_info")
+        global nasdaq_exchange_info
         return render_template("buy.html", nasdaq_exchange_info=nasdaq_exchange_info)
 
 
@@ -274,7 +274,7 @@ def register():
             return redirect("/register")
         try:
             findName=Users.query.filter_by(username=request.form.get("username")).first()
-            if username == findName:
+            if findName:
                 flash("User name already taken")
                 return redirect("/register")
         except:
@@ -428,7 +428,7 @@ def build():
                 db.session.add(new_stocks)
                 db.session.commit()
                 nasdaq_exchange_info.extend(new_stocks)
-                
+
         prices = df.copy()
         fig = px.line(prices, x=prices.index, y=prices.columns, title='Price Graph')
         fig = fig.update_xaxes(rangeslider_visible=True)
