@@ -30,7 +30,11 @@ def init_dashboard(server):
         history = db.session.query(History.symbol, History.cml_units, History.price, History.time, History.gain_loss, History.cml_cost, History.cash_flow, History.avg_price).filter_by(user_id=session["user_id"]).all()
     except:
         history=[]
-    if history == []:
+    try:
+        stocks = db.session.query(Records.symbol, func.sum(Records.number_of_shares).label('sumshares'), func.avg(Records.purchase_p).label('purchase_p')).filter_by(user_id=session["user_id"]).group_by(Records.symbol).all()
+    except:
+        stocks = []
+    if history == [] or stocks == []:
         try:
             availableCash = db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
         except:
@@ -282,6 +286,7 @@ def init_dashboard(server):
         plotlydf_portfval['cml_cost'] = plotlydf_portfval['cml_cost'].fillna(0).cumsum()
         plotlydf_portfval['ptf_growth_wo_purchases'] = plotlydf_portfval['portf_value'] - plotlydf_portfval['cml_cost']
         plotlydf_portfval['ptf_value_pctch_wo_purchases'] = ((plotlydf_portfval['ptf_growth_wo_purchases']/plotlydf_portfval['portf_value'])*100).round(2)
+        print(plotlydf_portfval)
 
 
         if math.isnan(plotlydf_portfval.iloc[-1]['sp500_growth']) == True:
@@ -295,6 +300,7 @@ def init_dashboard(server):
             grandTotal = availableCash
             totalPortValue = 0
             totalprolos = 0
+            portfolio_pct = 0
 
         else:
             stocks = [r._asdict() for r in stocks]
@@ -302,7 +308,6 @@ def init_dashboard(server):
             totalPortValue = 0
             totalprolos = 0
             portfolio_pct = 0
-
 
             #building the index
             for stock in stocks:
@@ -553,7 +558,7 @@ def init_dashboard(server):
                 html.Hr(),
                 ], width={'size': 8, 'offset': 0, 'order': 1}),  # width first column on second row
                 dbc.Col([  # second column on second row
-                html.H5('Portfolio', className='text-center'),
+                html.H5('Portfolio Return', className='text-center'),
                 html.Div(dcc.Graph(id='indicators-ptf',
                         figure=indicators_ptf,
                         style={"maxHeight": "550px", 'overflowY': 'scroll'})),
@@ -595,9 +600,166 @@ def init_dashboard(server):
     def load_user_dash(input1):
         if session.get('user_name'):
             user = session.get('user_name')
-            history = db.session.query(History.symbol, History.cml_units, History.price, History.time, History.gain_loss, History.cml_cost, History.cash_flow, History.avg_price).filter_by(user_id=session["user_id"]).all()
+        try:
+            stocks = db.session.query(Records.symbol, func.sum(Records.number_of_shares).label('sumshares'), func.avg(Records.purchase_p).label('purchase_p')).filter_by(user_id=session["user_id"]).group_by(Records.symbol).all()
+        except:
+            stocks = []
+        if stocks == []:
+            try:
+                availableCash = db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
+            except:
+                availableCash = 0
+            totalPortValue = 0
+            totalprolos = 0
+
+            today = datetime.today().date()
+            start_sp = today - BDay(220)
+            sp500 = web.get_data_yahoo('^GSPC', start_sp, today)
+            new_row = web.get_data_yahoo('^GSPC', period='1m')
+            sp500= pd.concat([sp500, new_row])
+            clean_header(sp500)
+            sp500_empty = sp500[['adj_close', 'open']].reset_index()
+            sp500_empty = sp500_empty.drop_duplicates(subset='Date', keep='first')
+            sp500_empty['sp500_diff'] = (sp500_empty['adj_close'].diff()).round(2)
+            sp500_empty['daily_return'] = ((sp500_empty['adj_close']/sp500_empty['adj_close'].shift(1)) - 1).round(4)*100
+
+            kpi_sp500_1d_pct = sp500_empty.tail(1).daily_return.iloc[0]
+            #open of first day in the timeframe / adj_close of last day
+            kpi_sp500_7d_pct = (1 - (sp500_empty.tail(7).open.iloc[0]/sp500_empty.adj_close.iloc[-1])).round(4)*100
+            kpi_sp500_15d_pct = (1 - (sp500_empty.tail(15).open.iloc[0]/sp500_empty.adj_close.iloc[-1])).round(4)*100
+            kpi_sp500_30d_pct = (1 - (sp500_empty.tail(30).open.iloc[0]/sp500_empty.adj_close.iloc[-1])).round(4)*100
+            kpi_sp500_200d_pct = (1 - (sp500_empty.tail(200).open.iloc[0]/sp500_empty.adj_close.iloc[-1])).round(4)*100
+
+            CHART_THEME = 'plotly_white'
+
+            indicators_sp500 = go.Figure()
+            indicators_sp500.layout.template = CHART_THEME
+
+            indicators_sp500.add_trace(go.Indicator(
+                mode = "number+delta",
+                value = kpi_sp500_1d_pct,
+                number = {'suffix': " %"},
+                title = {"text": "<br><span style='font-size:0.7em;color:gray'>1 Day</span>"},
+                domain = {'row': 0, 'column': 0}))
+
+            indicators_sp500.add_trace(go.Indicator(
+                mode = "number+delta",
+                value = kpi_sp500_7d_pct,
+                number = {'suffix': " %"},
+                title = {"text": "<br><span style='font-size:0.7em;color:gray'>7 Days</span>"},
+                domain = {'row': 1, 'column': 0}))
+
+            indicators_sp500.add_trace(go.Indicator(
+                mode = "number+delta",
+                value = kpi_sp500_15d_pct,
+                number = {'suffix': " %"},
+                title = {"text": "<span style='font-size:0.7em;color:gray'>15 Days</span>"},
+                domain = {'row': 2, 'column': 0}))
+
+            indicators_sp500.add_trace(go.Indicator(
+                mode = "number+delta",
+                value = kpi_sp500_30d_pct,
+                number = {'suffix': " %"},
+                title = {"text": "<span style='font-size:0.7em;color:gray'>30 Days</span>"},
+                domain = {'row': 3, 'column': 0}))
+
+            indicators_sp500.add_trace(go.Indicator(
+                mode = "number+delta",
+                value = kpi_sp500_200d_pct,
+                number = {'suffix': " %"},
+                title = {"text": "<span style='font-size:0.7em;color:gray'>200 Days</span>"},
+                domain = {'row': 4, 'column': 1}))
+
+            indicators_sp500.update_layout(
+                grid = {'rows': 5, 'columns': 1, 'pattern': "independent"},
+                margin=dict(l=50, r=50, t=30, b=30)
+            )
+
+            indicators_ptf = go.Figure()
+            indicators_ptf.layout.template = CHART_THEME
+            indicators_ptf.add_trace(go.Indicator(
+                mode = "number+delta",
+                value = availableCash,
+                number = {'prefix': " $"},
+                title = {"text": "<br><span style='font-size:0.7em;color:gray'>Cash</span>"},
+                domain = {'row': 0, 'column': 0}))
+
+            indicators_ptf.add_trace(go.Indicator(
+                mode = "number+delta",
+                value = totalPortValue,
+                number = {'prefix': "$"},
+                title = {"text": "<br><span style='font-size:0.7em;color:gray'>Total Value</span>"},
+                domain = {'row': 1, 'column': 0}))
+
+            indicators_ptf.add_trace(go.Indicator(
+                mode = "number+delta",
+                value = totalprolos,
+                number = {'prefix': "$"},
+                title = {"text": "<span style='font-size:0.7em;color:gray'>Total Profit/Loss</span>"},
+                domain = {'row': 2, 'column': 0}))
+
+            indicators_ptf.update_layout(
+                height=550,
+                grid = {'rows': 5, 'columns': 1, 'pattern': "independent"},
+                margin=dict(l=50, r=50, t=30, b=30)
+            )
+
+            chart_ptfvalue = go.Figure()  # generating a figure that will be updated in the following lines
+            chart_ptfvalue.add_trace(go.Scatter(x=sp500_empty.Date, y=sp500_empty.adj_close,
+                                mode='lines',  # you can also use "lines+markers", or just "markers"
+                                name='S&P 500 Value'))
+            chart_ptfvalue.layout.template = CHART_THEME
+            chart_ptfvalue.layout.height=500
+            chart_ptfvalue.update_layout(margin = dict(t=50, b=50, l=25, r=25))  # this will help you optimize the chart space
+            chart_ptfvalue.update_layout(
+                title='S&P 500 Value (USD $)',
+                xaxis_tickfont_size=12,
+                yaxis=dict(
+                    title='Value: $ USD',
+                    titlefont_size=14,
+                    tickfont_size=12,
+                    ))
+
+            fig_growth2 = go.Figure()
+            fig_growth2.layout.template = CHART_THEME
+
+            fig_growth2.add_trace(go.Bar(
+                x=sp500_empty.Date,
+                y=sp500_empty.daily_return,
+                name='S&P 500',
+            ))
+            fig_growth2.update_layout(barmode='group')
+            fig_growth2.layout.height=300
+            fig_growth2.update_layout(margin = dict(t=50, b=50, l=25, r=25))
+            fig_growth2.update_layout(
+                xaxis_tickfont_size=12,
+                yaxis=dict(
+                    title='% change',
+                    titlefont_size=13,
+                    tickfont_size=12,
+                    ))
+
+            fig_growth2.update_layout(legend=dict(
+                yanchor="top",
+                y=0.99,
+                xanchor="right",
+                x=0.99))
+
+            donut_top = go.Figure()
+            donut_top.layout.template = CHART_THEME
+            donut_top.add_trace(go.Pie(labels=['No Stocks'], values=[0]))
+            donut_top.update_traces(hole=.7, hoverinfo="label+value+percent")
+            donut_top.update_traces(textposition='outside', textinfo='label+value')
+            donut_top.update_layout(showlegend=False)
+            donut_top.update_layout(margin = dict(t=50, b=50, l=25, r=25))
+        else:
+            history = db.session.query(History.symbol, History.cml_units, History.number_of_shares, History.price, History.time, History.gain_loss, History.cml_cost, History.cash_flow, History.avg_price).filter_by(user_id=session["user_id"]).all()
+            records = db.session.query(Records.symbol, Records.execution_time).filter_by(user_id=session["user_id"]).all()
             all_transactions=pd.DataFrame(history)
-            all_tickers = set(list(stock['symbol'] for stock in history))
+            all_records = pd.DataFrame(records)
+            all_transactions=all_transactions.loc[all_transactions['symbol'].isin(all_records['symbol']) & all_transactions['time'].isin(all_records['execution_time'])]
+            print(all_transactions)
+            all_tickers = set(list(stock for stock in all_transactions['symbol']))
             today = datetime.today().date()
             end_stocks = today
             start_stocks = all_transactions.time.min().date()
@@ -682,6 +844,7 @@ def init_dashboard(server):
             kpi_sp500_30d_pct = ((portf_allvalues.sp500_mktvalue.iloc[-1] - portf_allvalues.tail(30).open.iloc[0])/portf_allvalues.tail(30).open.iloc[0]).round(4)*100
             kpi_sp500_200d_pct = ((portf_allvalues.sp500_mktvalue.iloc[-1] - portf_allvalues.tail(200).open.iloc[0])/portf_allvalues.tail(200).open.iloc[0]).round(4)*100
 
+            print(portf_allvalues)
             initial_date = min_date  # do not use anything earlier than your first trade
             plotlydf_portfval = portf_allvalues[portf_allvalues.index >= initial_date]
             plotlydf_portfval = plotlydf_portfval[['portf_value', 'sp500_mktvalue', 'ptf_value_pctch', 'sp500_pctch', 'ptf_value_diff', 'sp500_diff']].reset_index().round(2)
@@ -699,7 +862,7 @@ def init_dashboard(server):
             plotlydf_portfval['cml_cost'] = plotlydf_portfval['cml_cost'].fillna(0).cumsum()
             plotlydf_portfval['ptf_growth_wo_purchases'] = plotlydf_portfval['portf_value'] - plotlydf_portfval['cml_cost']
             plotlydf_portfval['ptf_value_pctch_wo_purchases'] = (((plotlydf_portfval['ptf_growth_wo_purchases']/plotlydf_portfval['portf_value'])*100).diff()).round(2)
-
+            print(plotlydf_portfval)
 
             if math.isnan(plotlydf_portfval.iloc[-1]['sp500_growth']) == True:
                 plotlydf_portfval = plotlydf_portfval[:-1]
@@ -712,6 +875,7 @@ def init_dashboard(server):
                 grandTotal = availableCash
                 totalPortValue = 0
                 totalprolos = 0
+                portfolio_pct = 0
 
             else:
                 stocks = [r._asdict() for r in stocks]
@@ -766,6 +930,13 @@ def init_dashboard(server):
                     titlefont_size=14,
                     tickfont_size=12,
                     ))
+            chart_ptfvalue.update_layout(legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=0.99,
+                xanchor="right",
+                x=1
+            ))
 
             fig2 = go.Figure(data=[
                 go.Bar(name='Portfolio', x=plotlydf_portfval['date'], y=plotlydf_portfval['ptf_value_pctch_wo_purchases']),
@@ -817,7 +988,7 @@ def init_dashboard(server):
             ))
             fig_growth2.update_layout(barmode='group')
             fig_growth2.layout.height=300
-            fig_growth2.update_layout(margin = dict(t=50, b=50, l=25, r=25))
+            fig_growth2.update_layout(margin = dict(t=50, b=50, l=25, r=50))
             fig_growth2.update_layout(
                 xaxis_tickfont_size=12,
                 yaxis=dict(
@@ -827,10 +998,12 @@ def init_dashboard(server):
                     ))
 
             fig_growth2.update_layout(legend=dict(
-                yanchor="top",
-                y=0.99,
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
                 xanchor="right",
-                x=0.99))
+                x=1
+            ))
 
             indicators_ptf = go.Figure()
             indicators_ptf.layout.template = CHART_THEME
@@ -944,7 +1117,7 @@ def init_dashboard(server):
             donut_top.update_layout(showlegend=False)
             donut_top.update_layout(margin = dict(t=50, b=50, l=25, r=25))
 
-            return dbc.Col(html.H4(f'Welcome back, {user}', className='text-center text-primary, mb-3', id='greet')), chart_ptfvalue, indicators_ptf, fig_growth2, donut_top
+        return dbc.Col(html.H4(f'Welcome back, {user}', className='text-center text-primary, mb-3', id='greet')), chart_ptfvalue, indicators_ptf, fig_growth2, donut_top
 
 
     return dash_app.server

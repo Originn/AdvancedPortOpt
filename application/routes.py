@@ -141,7 +141,7 @@ def buy():
                 #insert new row in the database to record the purchase
                 new_history=History(session["user_id"], symbol, price, request.form.get("shares"), formatted_date, 'purchase', 0, round(cml_cost, 2), round(-(sharesPrice), 2), round(avg_price, 2), cost_unit, round(cost_transact, 2), int(cml_units))
                 db.session.add(new_history)
-                new_record=Records(session["user_id"], symbol, request.form.get("shares"), 'purchase', price, round(price*int(request.form.get("shares")), 2), formatted_date)
+                new_record=Records(session["user_id"], symbol, request.form.get("shares"), 'purchase', price, round(price*int(request.form.get("shares")), 2), formatted_date, None)
                 db.session.add(new_record)
                 Users.query.filter_by(id=session["user_id"]).update({'cash': availableCash-sharesPrice})
                 db.session.commit()
@@ -344,7 +344,7 @@ def sell():
                     gain_loss = price*NumOfshareToSell - share_data[0][3]*NumOfshareToSell
                     formatted_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     Records.query.filter_by(user_id=session["user_id"], symbol=request.form.get("symbol"), execution_time=share_data[0][2]).update({'number_of_shares' :  share_data[0][1] - NumOfshareToSell})
-                    new_history=History(session["user_id"], request.form.get("symbol"), price, NumOfshareToSell, formatted_date, 'sell', round(gain_loss, 2), round(cml_cost, 2), round(price*NumOfshareToSell, 2), round(avg_price, 2), cost_unit, cost_transact, int(cml_units))
+                    new_history=History(session["user_id"], request.form.get("symbol"), price, -(NumOfshareToSell), formatted_date, 'sell', round(gain_loss, 2), round(cml_cost, 2), round(price*NumOfshareToSell, 2), round(avg_price, 2), cost_unit, cost_transact, int(cml_units))
                     db.session.add(new_history)
                     Users.query.filter_by(id=session["user_id"]).update({'cash':Users.cash+moneyBack+gain_loss})
                     db.session.commit()
@@ -368,7 +368,7 @@ def sell():
                     formatted_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     Records.query.filter_by(user_id=session["user_id"], symbol=request.form.get("symbol"), execution_time=share_data[0][2]).delete()
                     Users.query.filter_by(id=session["user_id"]).update({'cash': Users.cash + moneyBack + gain_loss})
-                    new_history=History(session["user_id"], request.form.get("symbol"), price, share_data[0][1], formatted_date, 'sell', round(gain_loss, 2), round(cml_cost, 2), round(price*share_data[0][1], 2), round(avg_price, 2), round(cost_unit, 2), round(cost_transact, 2), int(cml_units))
+                    new_history=History(session["user_id"], request.form.get("symbol"), price, -(share_data[0][1]), formatted_date, 'sell', round(gain_loss, 2), round(cml_cost, 2), round(price*share_data[0][1], 2), round(avg_price, 2), round(cost_unit, 2), round(cost_transact, 2), int(cml_units))
                     db.session.add(new_history)
                     try:
                         pop=list(share_data.pop(0))
@@ -427,8 +427,7 @@ def build():
                 new_stocks=Stocks(col, col_sn)
                 db.session.add(new_stocks)
                 db.session.commit()
-                users_stocks = [[sn, s] for sn, s in db.session.query(Stocks.shortname, Stocks.symbol)]
-                nasdaq_exchange_info.extend(users_stocks)
+                nasdaq_exchange_info.extend(new_stocks)
 
         print(yf.Ticker("TSLA").splits)
         prices = df.copy()

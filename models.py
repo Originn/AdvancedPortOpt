@@ -13,7 +13,7 @@ class Records(db.Model):
     execution_time=db.Column(db.DateTime)
     last_split=db.Column(db.Text)
 
-    def __init__(self, user_id, symbol, number_of_shares, transaction_type, purchase_p, price, execution_time):
+    def __init__(self, user_id, symbol, number_of_shares, transaction_type, purchase_p, price, execution_time, last_split):
         self.user_id = user_id
         self.symbol = symbol
         self.number_of_shares = number_of_shares
@@ -111,7 +111,7 @@ class Test(db.Model):
         self.gamma=gamma
 
 class Stocks(db.Model):
-    symbol = db.Column(db.Text, primary_key=True)
+    symbol = db.Column(db.Text, primary_key=True, unique=True)
     shortname = db.Column(db.Text)
 
     def __init__(self, symbol, shortname):
