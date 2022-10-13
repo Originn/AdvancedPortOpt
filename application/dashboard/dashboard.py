@@ -12,13 +12,15 @@ import pandas as pd
 from datetime import datetime
 from pandas.tseries.offsets import BDay
 import pandas_datareader.data as web
-from helpers import clean_header, price_lookup
+from helpers import clean_header, price_lookup, GBPtoUSD, gbp
 import plotly.graph_objects as go
 import plotly.express as px
 from werkzeug.routing import Map
 from sqlalchemy import func
 from plotly.subplots import make_subplots
 from dash.dependencies import Input, Output
+import yfinance as yf
+import numpy as np
 
 def init_dashboard(server):
     try:
@@ -758,9 +760,11 @@ def init_dashboard(server):
             all_transactions=pd.DataFrame(history)
             all_records = pd.DataFrame(records)
             all_transactions=all_transactions.loc[all_transactions['symbol'].isin(all_records['symbol']) & all_transactions['time'].isin(all_records['execution_time'])]
+            print('all_transactions')
+            print(all_transactions)
             all_tickers = set(list(stock for stock in all_transactions['symbol']))
             today = datetime.today().date()
-            end_stocks = today
+            end_stocks = today+pd.DateOffset(1)
             start_stocks = all_transactions.time.min().date()
 
             def get(tickers, startdate, enddate):
@@ -768,25 +772,43 @@ def init_dashboard(server):
                     df = web.get_data_yahoo(ticker, start=startdate, end=enddate)
                     # adding live prices if exists
                     new_row = web.get_data_yahoo(tickers=ticker, period='1m')
-                    return pd.concat([df, new_row])
+                    premarket = yf.Ticker(ticker).info['preMarketPrice']
+                    if premarket:
+                        new_row2=new_row.copy()
+                        new_row2.index=new_row2.index+pd.DateOffset(1)
+                        new_row2['Adj Close']=premarket
+                        df = pd.concat([df, new_row])
+                        df = pd.concat([df, new_row2])
+                        return pd.concat([df, new_row2])
+                    else:
+                        return df
                 datas = map(data, tickers)
                 return(pd.concat(datas, keys=tickers, names=['ticker', 'date']))
 
             all_data = get(all_tickers, start_stocks, end_stocks)
-            all_data = all_data.drop_duplicates()
+            print('all_data1')
+            print(all_data)
+            all_data = all_data[~all_data.index.duplicated(keep='first')]
+            print('all_data')
+            print(all_data)
             MEGA_DICT = {}
             min_date = min(stock['time'] for stock in history).strftime('%Y-%m-%d')
             min_date=datetime.strptime(min_date, '%Y-%m-%d')
             min_inds = all_transactions.groupby("symbol", sort=False).time.idxmin()
             result = all_transactions.loc[min_inds]
+            print('result')
+            print(result)
             #result=result.rename(columns={'time' : 'date', 'symbol': 'ticker', 'cost' : 'cashflow', 'number_of_shares' : 'cml_units', 'cost': 'cml_cost'})
             result=result.rename(columns={'time' : 'date', 'symbol': 'ticker'})
             result.drop('price', inplace= True, axis=1)
             result['date']=result['date'].dt.date.astype('datetime64')
             TX_COLUMNS = ['date', 'ticker', 'cash_flow', 'cml_units', 'cml_cost', 'gain_loss']
             tx_filt = result[TX_COLUMNS]
+            print('tx_filt')
+            print(tx_filt)
             for ticker in all_tickers:
                 prices_df = all_data[all_data.index.get_level_values('ticker').isin([ticker])].reset_index()
+                print('prices_df', prices_df)
                 PX_COLS = ['date', 'Adj Close']
                 prices_df = prices_df[prices_df.date >= min_date-BDay(1)][PX_COLS].set_index(['date'])
                 # Making sure we get sameday transactions
@@ -795,6 +817,7 @@ def init_dashboard(server):
                                                                     'cml_cost': 'last',
                                                                     'gain_loss': 'sum'})
                 # Merging price history and transactions dataframe
+                print('tx_df', tx_df)
                 tx_and_prices = pd.merge(prices_df, tx_df, how='outer', left_index=True, right_index=True).fillna(0)
                 # This is to fill the days that were not in our transaction dataframe
                 tx_and_prices['cml_units'] = tx_and_prices['cml_units'].replace(to_replace=0, method='ffill')
@@ -804,7 +827,10 @@ def init_dashboard(server):
                 tx_and_prices['cashflow'] = tx_and_prices['cash_flow'].cumsum()
                 tx_and_prices['avg_price'] = (tx_and_prices['cml_cost']/tx_and_prices['cml_units'])
                 tx_and_prices['mktvalue'] = (tx_and_prices['cml_units']*tx_and_prices['Adj Close'])
+                if tx_and_prices['Adj Close'].iloc[-1]==0:
+                    tx_and_prices['mktvalue'].iloc[-1] = tx_and_prices['cml_cost'].iloc[-1]
                 tx_and_prices = tx_and_prices.add_prefix(ticker+'_')
+                print(tx_and_prices)
                 # Once we're happy with the dataframe, add it to the dictionary
                 MEGA_DICT[ticker] = tx_and_prices.round(3)
 
@@ -813,8 +839,25 @@ def init_dashboard(server):
 
             MEGA_DF['date'] = pd.to_datetime(MEGA_DF['date'])
             MEGA_DF.set_index('date', inplace=True)
-            portf_allvalues = MEGA_DF.filter(regex='mktvalue').fillna(0) #  getting just the market value of each ticker
+            print('MEGA_DF')
+            print(MEGA_DF)
+            portf_allvalues = MEGA_DF.filter(regex='mktvalue').fillna(0)
+            # portf_allvalues.iloc[-1]=portf_allvalues.iloc[-1].replace(0, np.nan)
+            # portf_allvalues=portf_allvalues.fillna(method='ffill')
+            # if (portf_allvalues.iloc[-2]==0).any():
+            #     s = (portf_allvalues.iloc[-2]).eq(0).idxmax().removesuffix('_mktvalue')
+            #     value = tx_filt[tx_filt['ticker']==s]['cml_cost']
+            #     portf_allvalues.iloc[-2]=portf_allvalues.iloc[-2].replace(0, int(value))
+            # if (portf_allvalues.iloc[-2]==0).any():
+            #     s = (portf_allvalues.iloc[-1]).eq(0).idxmax().removesuffix('_mktvalue')
+            #     value = tx_filt[tx_filt['ticker']==s]['cml_cost']
+            #     portf_allvalues.iloc[-1]=portf_allvalues.iloc[-1].replace(0, int(value))
+            print('portf_allvalues10')
+            print(portf_allvalues)#  getting just the market value of each ticker
             portf_allvalues['portf_value'] = portf_allvalues.sum(axis=1) # summing all market values
+            print('portf_allvalues12')
+            print(portf_allvalues['portf_value'])
+
 
 
 
@@ -822,8 +865,16 @@ def init_dashboard(server):
             start_sp = today - BDay(200)
             sp500 = web.get_data_yahoo('^GSPC', start_sp, today)
             new_row = web.get_data_yahoo('^GSPC', period='1m')
-            sp500= pd.concat([sp500, new_row])
+            new_row2=new_row.copy()
+            new_row2.index=new_row2.index+pd.DateOffset(1)
+            print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+            print('new_row2')
+            print(new_row)
+            sp500 = pd.concat([sp500, new_row])
+            sp500 = pd.concat([sp500, new_row2])
             clean_header(sp500)
+            sp500=sp500[~sp500.index.duplicated(keep='first')]
+            print(sp500)
 
 
             #getting the pct change
@@ -834,10 +885,13 @@ def init_dashboard(server):
             portf_allvalues['sp500_pctch'] = (portf_allvalues['sp500_mktvalue'].pct_change()*100).round(2)
             portf_allvalues['ptf_value_diff'] = (portf_allvalues['portf_value'].diff()).round(2)
             portf_allvalues['sp500_diff'] = (portf_allvalues['sp500_mktvalue'].diff()).round(2)
+            portf_allvalues['sp500_mktvalue'].fillna(method='ffill', inplace=True)
+            print('portf_allvalues')
+            print(portf_allvalues)
 
             # KPI's for S&P500
 
-            kpi_sp500_1d_pct = ((portf_allvalues.sp500_mktvalue.iloc[-1] - portf_allvalues.sp500_mktvalue.iloc[-2])/portf_allvalues.sp500_mktvalue.iloc[-2]).round(4)*100
+            kpi_sp500_1d_pct = ((portf_allvalues.sp500_mktvalue.iloc[-1] - portf_allvalues.tail(1).open.iloc[0])/portf_allvalues.tail(1).open.iloc[0]).round(4)*100
             kpi_sp500_7d_pct = ((portf_allvalues.sp500_mktvalue.iloc[-1] - portf_allvalues.tail(5).open.iloc[0])/portf_allvalues.tail(5).open.iloc[0]).round(4)*100
             kpi_sp500_15d_pct = ((portf_allvalues.sp500_mktvalue.iloc[-1] - portf_allvalues.tail(15).open.iloc[0])/portf_allvalues.tail(15).open.iloc[0]).round(4)*100
             kpi_sp500_30d_pct = ((portf_allvalues.sp500_mktvalue.iloc[-1] - portf_allvalues.tail(30).open.iloc[0])/portf_allvalues.tail(30).open.iloc[0]).round(4)*100
@@ -845,10 +899,14 @@ def init_dashboard(server):
 
             initial_date = min_date  # do not use anything earlier than your first trade
             plotlydf_portfval = portf_allvalues[portf_allvalues.index >= initial_date]
+            print('plotlydf_portfval1')
+            print(plotlydf_portfval)
             plotlydf_portfval = plotlydf_portfval[['portf_value', 'sp500_mktvalue', 'ptf_value_pctch', 'sp500_pctch', 'ptf_value_diff', 'sp500_diff']].reset_index().round(2)
+            print('plotlydf_portfval2')
+            print(plotlydf_portfval)
             # calculating cumulative growth since initial date
-            plotlydf_portfval['ptf_growth'] = plotlydf_portfval.portf_value/plotlydf_portfval['portf_value'].iloc[0]
-            plotlydf_portfval['sp500_growth'] = plotlydf_portfval.sp500_mktvalue/plotlydf_portfval['sp500_mktvalue'].iloc[0]
+            plotlydf_portfval['ptf_growth'] = (plotlydf_portfval.portf_value.pct_change()*100).round(2)
+            plotlydf_portfval['sp500_growth'] = (plotlydf_portfval.sp500_mktvalue.pct_change()*100).round(2)
 
             plotlydf_portfval.rename(columns={'index': 'date'}, inplace=True)  # needed for later
             all_transactions_mod = all_transactions[['time', 'cml_cost']].copy()
@@ -856,13 +914,23 @@ def init_dashboard(server):
             all_transactions_mod.rename(columns={'time': 'date'}, inplace=True)
             all_transactions_mod['date']= pd.to_datetime(all_transactions_mod['date'], format='%Y-%m-%d')
             all_transactions_mod = all_transactions_mod.groupby('date')['cml_cost'].sum()
+            print('all_transactions_mod')
+            print(all_transactions_mod)
+            print('plotlydf_portfval')
+            print(plotlydf_portfval)
             plotlydf_portfval = pd.merge(plotlydf_portfval, all_transactions_mod, on='date', how='left')
+            print('plotlydf_portfval2')
+            print(plotlydf_portfval)
             plotlydf_portfval['cml_cost'] = plotlydf_portfval['cml_cost'].fillna(0).cumsum()
             plotlydf_portfval['ptf_growth_wo_purchases'] = plotlydf_portfval['portf_value'] - plotlydf_portfval['cml_cost']
             plotlydf_portfval['ptf_value_pctch_wo_purchases'] = (((plotlydf_portfval['ptf_growth_wo_purchases']/plotlydf_portfval['portf_value'])*100).diff()).round(2)
 
+
             if math.isnan(plotlydf_portfval.iloc[-1]['sp500_growth']) == True:
+                print('ok')
                 plotlydf_portfval = plotlydf_portfval[:-1]
+                print('plotlydf_portfval')
+                print(plotlydf_portfval)
 
             stocks = db.session.query(Records.symbol, func.sum(Records.number_of_shares).label('sumshares'), func.avg(Records.purchase_p).label('purchase_p')).filter_by(user_id=session["user_id"]).group_by(Records.symbol).all()
 
@@ -963,12 +1031,18 @@ def init_dashboard(server):
             df['weekday'] = df.date.dt.day_name()  # could be interesting to analyze weekday returns later
             df['year'] = df.date.dt.year
             df['weeknumber'] = df.date.dt.week    # could be interesting to try instead of timeperiod
-            df['timeperiod'] = df.month.astype(str) + ' - ' + df.date.dt.day.astype(str).str.zfill(2)
+            df['timeperiod'] = pd.to_datetime(df['date'], format='%d-%b')
+            print('df')
+            print(df)
 
             # getting the percentage change for each period. the first period will be NaN
             sp = (df.reset_index().groupby('timeperiod').last()['sp500_growth'].pct_change()*100).round(2)
             ptf = df.reset_index().groupby('timeperiod').last()['ptf_growth'].pct_change()*100
             plotlydf_growth_compare = pd.merge(ptf, sp, on='timeperiod').reset_index().round(3)
+            print('plotlydf_growth_compare')
+            print(plotlydf_growth_compare)
+            pd.set_option('display.max_columns', None)
+            print(plotlydf_portfval)
 
 
             fig_growth2 = go.Figure()
@@ -980,7 +1054,7 @@ def init_dashboard(server):
             ))
             fig_growth2.add_trace(go.Bar(
                 x=plotlydf_growth_compare.timeperiod,
-                y=plotlydf_growth_compare.sp500_growth.round(2),
+                y=plotlydf_portfval.sp500_growth,
                 name='S&P 500',
             ))
             fig_growth2.update_layout(barmode='group')
@@ -997,7 +1071,7 @@ def init_dashboard(server):
             fig_growth2.update_layout(legend=dict(
                 orientation="h",
                 yanchor="bottom",
-                y=1.02,
+                y=0.99,
                 xanchor="right",
                 x=1
             ))

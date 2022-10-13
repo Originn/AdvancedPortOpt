@@ -10,7 +10,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from sqlalchemy import func, cast, Date, desc
-from helpers import price_lookup, clean_header, usd, GBPtoUSD, contains_multiple_words, lookup
+from helpers import price_lookup, clean_header, usd, GBPtoUSD, contains_multiple_words, lookup, gbp
 import yfinance as yf
 from datetime import datetime
 from flask_session import Session
@@ -651,7 +651,7 @@ def allocation1():
 
             new_history=History(session["user_id"], key, price, int(amount), formatted_date, 'purchase', 0, round(cml_cost, 2), round(-(sharesPrice), 2), round(avg_price, 2), cost_unit, round(cost_transact, 2), int(cml_units))
             db.session.add(new_history)
-            new_record=Records(session["user_id"], key, int(amount), 'purchase', price, price*int(amount), formatted_date)
+            new_record=Records(session["user_id"], key, int(amount), 'purchase', price, price*int(amount), formatted_date, None)
             db.session.add(new_record)
             Users.query.filter_by(id=session["user_id"]).update({'cash':availableCash-(amount*price)})
 
@@ -693,7 +693,7 @@ def allocation2():
 
             new_history=History(session["user_id"], key, price, int(amount), formatted_date, 'purchase', 0, round(cml_cost, 2), round(-(sharesPrice), 2), round(avg_price, 2), cost_unit, round(cost_transact, 2), int(cml_units))
             db.session.add(new_history)
-            new_record=Records(session["user_id"], key, int(amount), 'purchase', price, price*int(amount), formatted_date)
+            new_record=Records(session["user_id"], key, int(amount), 'purchase', price, price*int(amount), formatted_date, None)
             db.session.add(new_record)
             Users.query.filter_by(id=session["user_id"]).update({'cash':availableCash-(amount*price)})
 
