@@ -48,6 +48,7 @@ nasdaq_exchange_info_dict=mc.get("nasdaq_exchange_info_dict")
 nasdaq_exchange_info = mc.get("nasdaq_exchange_info")
 users_stocks = [[sn, s] for sn, s in db.session.query(Stocks.shortname, Stocks.symbol)]
 nasdaq_exchange_info.extend(users_stocks)
+print(nasdaq_exchange_info)
 
 Session(app)
 #app = init_dashboard(app)
@@ -419,15 +420,15 @@ def build():
             flash("Please enter a valid symbols (taken from Yahoo Finance)")
             return redirect("/build")
         global nasdaq_exchange_info
-        for col in df.columns:
-            col=col.upper()
-            if any(sublist[1]==col in sublist for sublist in nasdaq_exchange_info) is False:
-                col_sn = yf.Ticker(col).stats()["price"].get('longName')
-                col_list=[col, col_sn]
-                new_stocks=Stocks(col, col_sn)
-                db.session.add(new_stocks)
+        for ticker in df.columns:
+            ticker=ticker.upper()
+            if any(sublist[1]==ticker in sublist for sublist in nasdaq_exchange_info) is False:
+                ticker_ln = yf.Ticker(ticker).stats()["price"].get('longName')
+                ticker_list=[ticker_ln, ticker]
+                new_stock=Stocks(ticker, ticker_ln)
+                db.session.add(new_stock)
                 db.session.commit()
-                nasdaq_exchange_info.extend(new_stocks)
+                nasdaq_exchange_info.extend([ticker_list])
 
         prices = df.copy()
         fig = px.line(prices, x=prices.index, y=prices.columns, title='Price Graph')
