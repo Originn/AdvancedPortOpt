@@ -423,6 +423,8 @@ def build():
             ticker=ticker.upper()
             if any(sublist[1]==ticker in sublist for sublist in nasdaq_exchange_info) is False:
                 ticker_ln = yf.Ticker(ticker).stats()["price"].get('longName')
+                if not ticker_ln:
+                    ticker_ln = ticker
                 ticker_list=[ticker_ln, ticker]
                 new_stock=Stocks(ticker, ticker_ln)
                 db.session.add(new_stock)
