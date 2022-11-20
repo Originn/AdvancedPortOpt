@@ -21,6 +21,7 @@ import numpy as np
 import pypfopt
 from pypfopt import risk_models, DiscreteAllocation, objective_functions, EfficientSemivariance, efficient_frontier, EfficientFrontier
 from pypfopt import EfficientFrontier
+from multiprocessing import Process
 
 
 yf.pdr_override()
@@ -379,7 +380,7 @@ def sell():
 
             return redirect("/")
     else:
-        stocks = db.session.query(Records.symbol).group_by(Records.symbol).all()
+        stocks = db.session.query(Records.symbol).filter_by(user_id=session["user_id"]).group_by(Records.symbol).all()
         return render_template("/sell.html", stocks=stocks)
 
 @app.route("/about")
@@ -418,18 +419,27 @@ def build():
         except ValueError:
             flash("Please enter a valid symbols (taken from Yahoo Finance)")
             return redirect("/build")
+
+        def enter_sql_data(app, df, nasdaq_exchange_info, Stocks):
+            print('Hi')
+            for ticker in df.columns:
+                print('Hi2')
+                ticker=ticker.upper()
+                if any(sublist[1]==ticker in sublist for sublist in nasdaq_exchange_info) is False:
+                    ticker_ln = yf.Ticker(ticker).stats()["price"].get('longName')
+                    if not ticker_ln:
+                        ticker_ln = ticker
+                    ticker_list=[ticker_ln, ticker]
+                    print('Hi3')
+                    with app.app_context():
+                        new_stock=Stocks(ticker, ticker_ln)
+                        db.session.add(new_stock)
+                        db.session.commit()
+                    nasdaq_exchange_info.extend([ticker_list])
         global nasdaq_exchange_info
-        for ticker in df.columns:
-            ticker=ticker.upper()
-            if any(sublist[1]==ticker in sublist for sublist in nasdaq_exchange_info) is False:
-                ticker_ln = yf.Ticker(ticker).stats()["price"].get('longName')
-                if not ticker_ln:
-                    ticker_ln = ticker
-                ticker_list=[ticker_ln, ticker]
-                new_stock=Stocks(ticker, ticker_ln)
-                db.session.add(new_stock)
-                db.session.commit()
-                nasdaq_exchange_info.extend([ticker_list])
+        app1 = app._get_current_object()
+        p1 = Process(target=enter_sql_data, args=[app1, df, nasdaq_exchange_info, Stocks])
+        p1.start()
 
         prices = df.copy()
         fig = px.line(prices, x=prices.index, y=prices.columns, title='Price Graph')
