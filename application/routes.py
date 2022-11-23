@@ -19,9 +19,10 @@ import random
 import yfinance.shared as shared
 import numpy as np
 import pypfopt
-from pypfopt import risk_models, DiscreteAllocation, objective_functions, EfficientSemivariance, efficient_frontier, EfficientFrontier
+from pypfopt import risk_models, DiscreteAllocation, objective_functions, EfficientSemivariance, efficient_frontier, EfficientFrontier, HRPOpt
 from pypfopt import EfficientFrontier
 from multiprocessing import Process
+from pandas_datareader import data
 
 
 yf.pdr_override()
@@ -47,6 +48,8 @@ mc.enable_retry_delay(True)
 
 nasdaq_exchange_info_dict=mc.get("nasdaq_exchange_info_dict")
 nasdaq_exchange_info = mc.get("nasdaq_exchange_info")
+top_50_crypto=mc.get("top_50_crypto")
+top_US_stocks = mc.get("top_US")
 users_stocks = [[sn, s] for sn, s in db.session.query(Stocks.shortname, Stocks.symbol)]
 nasdaq_exchange_info.extend(users_stocks)
 
@@ -200,7 +203,7 @@ def login():
             user = Users.query.filter_by(username=request.form.get("username")).first()
             user.username == request.form.get("username")
         except AttributeError:
-            flash("invalid username and/or password")
+            flash("invalid username please register")
             return redirect("/login")
         # Ensure username exists and password is correct
         if not check_password_hash(user.hash, request.form.get("password")):
@@ -286,15 +289,6 @@ def register():
         if not password:
             flash("Missing password")
             return redirect("/register")
-        if len(password) < 8:
-            flash("Password is less than 8 characters")
-            return redirect("/register")
-
-        if not (re.search(r"[\d]+", password) and re.search(r"[A-Z]+", password)):
-            flash("This password must contain at least 1 digit and at least 1 uppercase character")
-            return redirect("/register")
-
-
 
         confirmation = request.form.get("confirmation")
         if password != confirmation:
@@ -421,16 +415,13 @@ def build():
             return redirect("/build")
 
         def enter_sql_data(app, df, nasdaq_exchange_info, Stocks):
-            print('Hi')
             for ticker in df.columns:
-                print('Hi2')
                 ticker=ticker.upper()
                 if any(sublist[1]==ticker in sublist for sublist in nasdaq_exchange_info) is False:
                     ticker_ln = yf.Ticker(ticker).stats()["price"].get('longName')
                     if not ticker_ln:
                         ticker_ln = ticker
                     ticker_list=[ticker_ln, ticker]
-                    print('Hi3')
                     with app.app_context():
                         new_stock=Stocks(ticker, ticker_ln)
                         db.session.add(new_stock)
@@ -517,7 +508,7 @@ def build():
         plot_json3 = json.dumps(fig3, cls=plotly.utils.PlotlyJSONEncoder)
 
 
-        #using risk models optimized for the Efficient frontier to reduce to min volitility
+        #using risk models optimized for the Efficient frontier to reduce to min volitility, good for crypto currencies - not implemented in the website now.
         ef = EfficientFrontier(None, S)
         try:
             ef.min_volatility()
@@ -627,7 +618,7 @@ def build():
         else:
             cached_symbols=''
         availableCash=db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
-        return render_template("build.html", availableCash=round(availableCash, 4), GBP=GBPtoUSD(), nasdaq_exchange_info=nasdaq_exchange_info, cached_symbols=cached_symbols)
+        return render_template("build.html", availableCash=round(availableCash, 4), GBP=GBPtoUSD(), nasdaq_exchange_info=nasdaq_exchange_info, cached_symbols=cached_symbols, top_50_crypto=top_50_crypto, top_US_stocks=top_US_stocks)
 
 @app.route("/allocation1", methods=["GET", "POST"])
 @login_required

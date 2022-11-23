@@ -8,6 +8,8 @@ from io import BytesIO
 from ftplib import FTP
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import current_app as app
+from bs4 import BeautifulSoup
+from requests import get
 
 
 #set memcache in Heroku
@@ -136,6 +138,39 @@ def stock_splits_update(*args):
                 db.session.query(Records).filter(Records.symbol==stock, func.to_char(Records.execution_time.cast(Date), 'yyyy-mm-dd')<last_split_date).update({'number_of_shares': Records.number_of_shares*last_split_amount, 'purchase_p': Records.purchase_p/last_split_amount}, synchronize_session='fetch')
             db.session.commit()
 
+def get_list_of_crypto_currencies():
+    #getting list of top 100 crypto currencies
+    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
+    CryptoCurrenciesUrl = 'https://finance.yahoo.com/crypto/?count=50&offset=0'
+    r= get(CryptoCurrenciesUrl, headers=headers)
+    data=r.text
+    soup=BeautifulSoup(data, 'html.parser')
+    crypto_symbols = []
+    for listing in soup.find_all('a', attrs={'data-test':'quoteLink'}):
+        crypto_symbols.append(listing.get_text())
+
+    #removing stable coins
+    unwanted = ['USDC-USD', 'BUSD-USD', 'DAI-USD', 'USDP-USD', 'FRAX-USD', 'USDT-USD']
+    for ele in sorted(unwanted, reverse = True):
+        try:
+            crypto_symbols.remove(ele)
+        except:
+            pass
+    return mc.set("top_50_crypto", crypto_symbols)
+
+def get_list_of_top_US():
+    #getting list of top 100 crypto currencies
+    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
+    US_symbolsUrl = 'https://finance.yahoo.com/screener/unsaved/fe4b8eb7-24b4-4124-a672-b5add0293f62?dependentField=sector&dependentValues=&offset=0&count=50'
+    r= get(US_symbolsUrl, headers=headers)
+    data=r.text
+    soup=BeautifulSoup(data, 'html.parser')
+    US_symbols = []
+    for listing in soup.find_all('a', attrs={'data-test':'quoteLink'}):
+        US_symbols.append(listing.get_text())
+
+    return mc.set("top_US", US_symbols)
+
 scheduler = BackgroundScheduler(timezone="Europe/London")
 # Runs from Monday to Friday at 5:30 (am)
 scheduler.add_job(
@@ -148,11 +183,29 @@ scheduler.add_job(
 )
 
 scheduler.add_job(
+    func=get_list_of_top_US,
+    trigger="cron",
+    max_instances=1,
+    day_of_week='mon-fri',
+    hour=5,
+    minute=32,
+)
+
+scheduler.add_job(
     func=stock_splits_update,
     trigger="cron",
     max_instances=1,
     day_of_week='mon-fri',
     hour=5,
     minute=15,
+)
+
+scheduler.add_job(
+    func=get_list_of_crypto_currencies,
+    trigger="cron",
+    max_instances=1,
+    day_of_week='mon-fri',
+    hour=5,
+    minute=20,
 )
 scheduler.start()

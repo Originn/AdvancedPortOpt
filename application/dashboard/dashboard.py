@@ -21,6 +21,8 @@ from plotly.subplots import make_subplots
 from dash.dependencies import Input, Output
 import yfinance as yf
 import numpy as np
+from pandas_datareader import data
+
 
 def init_dashboard(server):
     try:
@@ -48,7 +50,9 @@ def init_dashboard(server):
     sp500 = web.get_data_yahoo('^GSPC', start_sp, today)
     new_row = web.get_data_yahoo('^GSPC', period='1m')
     sp500= pd.concat([sp500, new_row])
+    print(new_row)
     clean_header(sp500)
+    print(sp500)
     sp500_empty = sp500[['adj_close', 'open']].reset_index()
     sp500_empty = sp500_empty.drop_duplicates(subset='Date', keep='first')
     sp500_empty['sp500_diff'] = (sp500_empty['adj_close'].diff()).round(2)
@@ -257,14 +261,6 @@ def init_dashboard(server):
 
             today = datetime.today().date()
             start_sp = today - BDay(220)
-            sp500 = web.get_data_yahoo('^GSPC', start_sp, today)
-            new_row = web.get_data_yahoo('^GSPC', period='1m')
-            sp500= pd.concat([sp500, new_row])
-            clean_header(sp500)
-            sp500_empty = sp500[['adj_close', 'open']].reset_index()
-            sp500_empty = sp500_empty.drop_duplicates(subset='Date', keep='first')
-            sp500_empty['sp500_diff'] = (sp500_empty['adj_close'].diff()).round(2)
-            sp500_empty['daily_return'] = ((sp500_empty['adj_close']/sp500_empty['adj_close'].shift(1)) - 1).round(4)*100
 
             kpi_sp500_1d_pct = sp500_empty.tail(1).daily_return.iloc[0]
             #open of first day in the timeframe / adj_close of last day
@@ -421,19 +417,19 @@ def init_dashboard(server):
             from multiprocessing import Process, Queue
             def get(tickers, all_transactions, enddate):
                 def data(ticker):
-                    def premarket1(ticker, q):
-                        pmarket = yf.Ticker(ticker).info['preMarketPrice']
-                        q.put(pmarket)
-                    queue = Queue()
-                    p2 = Process(target=premarket1, args=(ticker, queue))
-                    p2.start()
+                    def premarket1(ticker):
+                        try:
+                            pmarket = float(web.get_quote_yahoo(ticker)['preMarketPrice'])
+                            return pmarket
+                        except:
+                            return None
                     df = web.get_data_yahoo(ticker, start=all_transactions[all_transactions['symbol']==ticker]['time'].min().date(), end=enddate)
                     if str(today) not in str(df.reset_index().Date):
                         new_data = pd.DataFrame(df[-1:].values, index=[today], columns=df.columns)
                         df = pd.concat([df, new_data])
                     if ticker.endswith(".L"):
                         df.loc[:,'Adj Close'] = df.loc[:,'Adj Close']*GBPtoUSD()
-                    premarket = queue.get()
+                    premarket = premarket1(ticker)
                     if premarket:
                         df.iloc[-1, 4] = premarket
                         return df
@@ -491,14 +487,14 @@ def init_dashboard(server):
 
             portf_allvalues['portf_value'] = portf_allvalues.sum(axis=1) # summing all market values
 
-            # For the S&P500 price return
-            start_sp = today - BDay(200)
-            sp500 = web.get_data_yahoo('^GSPC', start_sp, today)
-            if today not in sp500.index:
-                new_data = pd.DataFrame(sp500[-1:].values, index=[today], columns=sp500.columns)
-                sp500 = pd.concat([sp500, new_data])
-            clean_header(sp500)
-            sp500=sp500[~sp500.index.duplicated(keep='first')]
+            # # For the S&P500 price return
+            # start_sp = today - BDay(200)
+            # #
+            # if today not in sp500.index:
+            #     new_data = pd.DataFrame(sp500[-1:].values, index=[today], columns=sp500.columns)
+            #     sp500 = pd.concat([sp500, new_data])
+            # clean_header(sp500)
+            # sp500=sp500[~sp500.index.duplicated(keep='first')]
 
             #getting the pct change
             portf_allvalues = portf_allvalues.join(sp500[['adj_close', 'open']], how='outer')
