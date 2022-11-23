@@ -161,7 +161,7 @@ def get_list_of_crypto_currencies():
 def get_list_of_top_US():
     #getting list of top 100 crypto currencies
     headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
-    US_symbolsUrl = 'https://finance.yahoo.com/screener/unsaved/fe4b8eb7-24b4-4124-a672-b5add0293f62?dependentField=sector&dependentValues=&offset=0&count=50'
+    US_symbolsUrl = 'https://finance.yahoo.com/screener/91aab120-765c-4dad-8bf4-2f05925d60af?offset=0&count=50'
     r= get(US_symbolsUrl, headers=headers)
     data=r.text
     soup=BeautifulSoup(data, 'html.parser')

@@ -783,7 +783,7 @@ def test():
             dftest=dftest.loc[:, dftest.columns.isin(list(alloc2.keys()))]
             #create a total value df where we can see the value of the portfolio on each day
             df1 = dftest.dot(pd.Series(alloc2))+leftover2
-
+            print(df1)
             max_profit_value=df1.max()-10000
             totalprice=0
             totalnewprice=0
@@ -798,6 +798,8 @@ def test():
                 totalprice += sharesPrice
             #what is thevalue of the portfolio today
             profitloss=totalnewprice-totalprice+leftover2
+            print(profitloss)
+            input()
             new_test=Test(request.form.get("start"), request.form.get("end"), list(alloc2.keys()), profitloss, session["user_id"], profit_date, method, max_profit_value, target_profit, gamma)
             db.session.add(new_test)
             db.session.commit()
