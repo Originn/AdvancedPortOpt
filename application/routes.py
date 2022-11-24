@@ -49,7 +49,9 @@ mc.enable_retry_delay(True)
 nasdaq_exchange_info_dict=mc.get("nasdaq_exchange_info_dict")
 nasdaq_exchange_info = mc.get("nasdaq_exchange_info")
 top_50_crypto=mc.get("top_50_crypto")
-top_US_stocks = mc.get("top_US")
+top_world_stocks = mc.get("top_world")
+top_US_stocks= mc.get("top_US")
+top_div = mc.get("top_div")
 users_stocks = [[sn, s] for sn, s in db.session.query(Stocks.shortname, Stocks.symbol)]
 nasdaq_exchange_info.extend(users_stocks)
 
@@ -618,7 +620,8 @@ def build():
         else:
             cached_symbols=''
         availableCash=db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
-        return render_template("build.html", availableCash=round(availableCash, 4), GBP=GBPtoUSD(), nasdaq_exchange_info=nasdaq_exchange_info, cached_symbols=cached_symbols, top_50_crypto=top_50_crypto, top_US_stocks=top_US_stocks)
+        print('top_US_stocks', top_US_stocks)
+        return render_template("build.html", availableCash=round(availableCash, 4), GBP=GBPtoUSD(), nasdaq_exchange_info=nasdaq_exchange_info, cached_symbols=cached_symbols, top_50_crypto=top_50_crypto, top_world_stocks=top_world_stocks, top_US_stocks=top_US_stocks, top_div=top_div)
 
 @app.route("/allocation1", methods=["GET", "POST"])
 @login_required

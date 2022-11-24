@@ -158,18 +158,46 @@ def get_list_of_crypto_currencies():
             pass
     return mc.set("top_50_crypto", crypto_symbols)
 
+def get_list_of_top_world():
+    #getting list of top 100 crypto currencies
+    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
+    world_symbols = []
+    for i in range(1, 61, 20):
+        world_symbolsUrl = 'https://finviz.com/screener.ashx?v=111&o=-marketcap&r=' + str(i)
+        r= get(world_symbolsUrl, headers=headers)
+        data=r.text
+        soup=BeautifulSoup(data, 'html.parser')
+        for listing in soup.find_all('a', attrs={'class':'screener-link-primary'}):
+            world_symbols.append(listing.get_text())
+    return mc.set("top_world", world_symbols)
+
+
 def get_list_of_top_US():
     #getting list of top 100 crypto currencies
     headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
-    US_symbolsUrl = 'https://finance.yahoo.com/screener/91aab120-765c-4dad-8bf4-2f05925d60af?offset=0&count=50'
-    r= get(US_symbolsUrl, headers=headers)
-    data=r.text
-    soup=BeautifulSoup(data, 'html.parser')
     US_symbols = []
-    for listing in soup.find_all('a', attrs={'data-test':'quoteLink'}):
-        US_symbols.append(listing.get_text())
-
+    for i in range(1, 41, 20):
+        US_symbolsUrl = 'https://finviz.com/screener.ashx?v=111&f=geo_usa&o=-marketcap&r=' + str(i)
+        r= get(US_symbolsUrl, headers=headers)
+        data=r.text
+        soup=BeautifulSoup(data, 'html.parser')
+        for listing in soup.find_all('a', attrs={'class':'screener-link-primary'}):
+            US_symbols.append(listing.get_text())
     return mc.set("top_US", US_symbols)
+
+#gathering top 40 matket cap stocks with dividend higher then 10%
+def top_40_mcap_world_higher_then_10pc_div():
+    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
+    div_symbols = []
+    for i in range(1, 41, 20):
+        div_symbolsUrl = 'https://finviz.com/screener.ashx?v=111&f=fa_div_veryhigh&o=-marketcap&r=' + str(i)
+        r= get(div_symbolsUrl, headers=headers)
+        data=r.text
+        soup=BeautifulSoup(data, 'html.parser')
+        for listing in soup.find_all('a', attrs={'class':'screener-link-primary'}):
+            div_symbols.append(listing.get_text())
+    return mc.set("top_div", div_symbols)
+
 
 scheduler = BackgroundScheduler(timezone="Europe/London")
 # Runs from Monday to Friday at 5:30 (am)
@@ -183,7 +211,16 @@ scheduler.add_job(
 )
 
 scheduler.add_job(
-    func=get_list_of_top_US,
+    func=top_40_mcap_world_higher_then_10pc_div,
+    trigger="cron",
+    max_instances=1,
+    day_of_week='mon-fri',
+    hour=4,
+    minute=55,
+)
+
+scheduler.add_job(
+    func=get_list_of_top_world,
     trigger="cron",
     max_instances=1,
     day_of_week='mon-fri',
