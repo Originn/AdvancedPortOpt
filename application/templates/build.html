@@ -14,12 +14,10 @@
   <input id="myInput" type="text" name="stock" placeholder="Company Name">
 </div>
 <div style="width: 60%; float:right">
-  <form>
     <input type="button" style="width: 40%; height: 40px; font-size: 13px" value="Top 50 crypto coins" name="no" onclick="enter_crypto()"/>
     <input type="button" style="width: 40%; height: 40px; font-size: 13px" value="Top 60 world stocks" name="no1" onclick="enter_world()"/>
     <input type="button" style="width: 40%; height: 40px; font-size: 13px" value="Top 40 US stocks" name="no2" onclick="enter_US()"/>
     <input type="button" style="text-align: center; width: 40%; height: 40px; font-size: 13px" value="Top 40 mcap +10% div" name="no3" onclick="enter_top_div()"/>
-  </form>
 </div>
 <div class="form-group">
     <textarea rows=10 id="myTxt" class="form-control" name="symbols" placeholder="symbols" type="text">{{ cached_symbols }}</textarea>
@@ -201,6 +199,8 @@ function enter_top_div()
 {
   document.getElementById("myTxt").value += {{ top_div | safe }}.join().split(",").join("\n") + "\n";
 }
+
+
 /*initiate the autocomplete function on the "myInput" element, and pass along the countries array as possible autocomplete values:*/
 autocomplete(document.getElementById("myInput"), company_name);
 </script>

@@ -148,7 +148,6 @@ def get_list_of_crypto_currencies():
     crypto_symbols = []
     for listing in soup.find_all('a', attrs={'data-test':'quoteLink'}):
         crypto_symbols.append(listing.get_text())
-
     #removing stable coins
     unwanted = ['USDC-USD', 'BUSD-USD', 'DAI-USD', 'USDP-USD', 'FRAX-USD', 'USDT-USD']
     for ele in sorted(unwanted, reverse = True):
@@ -156,6 +155,7 @@ def get_list_of_crypto_currencies():
             crypto_symbols.remove(ele)
         except:
             pass
+    print(crypto_symbols)
     return mc.set("top_50_crypto", crypto_symbols)
 
 def get_list_of_top_world():
@@ -200,7 +200,7 @@ def top_40_mcap_world_higher_then_10pc_div():
 
 
 scheduler = BackgroundScheduler(timezone="Europe/London")
-# Runs from Monday to Friday at 5:30 (am)
+
 scheduler.add_job(
     func=symbol_search,
     trigger="cron",
