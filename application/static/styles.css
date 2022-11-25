@@ -291,6 +291,6 @@ input[type=submit] {
 }
 
 input[type=button] {
-    width: 160px;  height: 40px;
-    font-size: 14px;
+    margin-bottom: 5px;
+    margin-top: 5px;
 }

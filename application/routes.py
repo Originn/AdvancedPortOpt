@@ -620,7 +620,6 @@ def build():
         else:
             cached_symbols=''
         availableCash=db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
-        print('top_US_stocks', top_US_stocks)
         return render_template("build.html", availableCash=round(availableCash, 4), GBP=GBPtoUSD(), nasdaq_exchange_info=nasdaq_exchange_info, cached_symbols=cached_symbols, top_50_crypto=top_50_crypto, top_world_stocks=top_world_stocks, top_US_stocks=top_US_stocks, top_div=top_div)
 
 @app.route("/allocation1", methods=["GET", "POST"])
@@ -786,8 +785,10 @@ def test():
             dftest=dftest.loc[:, dftest.columns.isin(list(alloc2.keys()))]
             #create a total value df where we can see the value of the portfolio on each day
             df1 = dftest.dot(pd.Series(alloc2))+leftover2
-            print(df1)
+            #print(df1)
+            #print(dftest)
             max_profit_value=df1.max()-10000
+            print(max_profit_value)
             totalprice=0
             totalnewprice=0
             #check what is the value of the stocks today

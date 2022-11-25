@@ -13,11 +13,14 @@
 <div class="autocomplete" style="width:300px;">
   <input id="myInput" type="text" name="stock" placeholder="Company Name">
 </div>
-<input type="button" value="Top 50 crypto coins" name="no" onclick="enter_crypto()"/>
-<div class="stocks-outer"><input type="button" value="Top 60 world stocks" name="no1" onclick="enter_world()"/></div>
-<div class="Top_40_US"><input type="button" size="50" value="  Top 40 US stocks " name="no2" onclick="enter_US()"/></div>
-<div class="stocks-inner"><input type="button" value="Top 40 mcap +10% div" name="no3" onclick="enter_top_div()"/></div>
-
+<div style="width: 70%; float:right">
+  <form>
+    <input type="button" style="width: 30%; height: 40px; font-size: 13px" value="Top 50 crypto coins" name="no" onclick="enter_crypto()"/>
+    <input type="button" style="width: 30%; height: 40px; font-size: 13px" value="Top 60 world stocks" name="no1" onclick="enter_world()"/>
+    <input type="button" style="width: 30%; height: 40px; font-size: 13px" value="Top 40 US stocks" name="no2" onclick="enter_US()"/>
+    <input type="button" style="text-align: center; width: 30%; height: 40px; font-size: 13px" value="Top 40 mcap +10% div" name="no3" onclick="enter_top_div()"/>
+  </form>
+</div>
 <div class="form-group">
     <textarea rows=10 id="myTxt" class="form-control" name="symbols" placeholder="symbols" type="text">{{ cached_symbols }}</textarea>
 </div>
@@ -181,22 +184,22 @@ var company_name = {{ nasdaq_exchange_info | safe }}
 
 function enter_crypto()
 {
-  document.getElementById("myTxt").value += {{ top_50_crypto | safe }}.join().split(",").join("\n");
+  document.getElementById("myTxt").value += {{ top_50_crypto | safe }}.join().split(",").join("\n") + "\n";
 }
 
 function enter_world()
 {
-  document.getElementById("myTxt").value += {{ top_world_stocks | safe }}.join().split(",").join("\n");
+  document.getElementById("myTxt").value += {{ top_world_stocks | safe }}.join().split(",").join("\n") + "\n";
 }
 
 function enter_US()
 {
-  document.getElementById("myTxt").value += {{ top_US_stocks | safe }}.join().split(",").join("\n");
+  document.getElementById("myTxt").value += {{ top_US_stocks | safe }}.join().split(",").join("\n") + "\n";
 }
 
 function enter_top_div()
 {
-  document.getElementById("myTxt").value += {{ top_div | safe }}.join().split(",").join("\n");
+  document.getElementById("myTxt").value += {{ top_div | safe }}.join().split(",").join("\n") + "\n";
 }
 /*initiate the autocomplete function on the "myInput" element, and pass along the countries array as possible autocomplete values:*/
 autocomplete(document.getElementById("myInput"), company_name);
