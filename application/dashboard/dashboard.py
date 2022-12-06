@@ -691,11 +691,10 @@ def init_dashboard(server):
                 domain = {'row': 0, 'column': 0}))
 
             indicators_ptf.add_trace(go.Indicator(
-                mode = "number",
+                mode = "number+delta",
                 value = availableCash,
                 number = {'prefix': "$"},
                 title = {"text": "<br><span style='font-size:0.7em;color:gray'>Available Cash</span>"},
-                delta = {'position': "bottom", 'reference': 10000, 'relative': False},
                 domain = {'row': 1, 'column': 0}))
 
             indicators_ptf.add_trace(go.Indicator(
