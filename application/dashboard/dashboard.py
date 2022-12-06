@@ -423,7 +423,7 @@ def init_dashboard(server):
                             return pmarket
                         except:
                             return None
-                    df = web.get_data_yahoo(ticker, start=all_transactions[all_transactions['symbol']==ticker]['time'].min().date(), end=enddate)
+                    df = web.get_data_yahoo(ticker, start=all_transactions[all_transactions['symbol']==ticker]['time'].min().date()-BDay(0), end=enddate)
                     if str(today) not in str(df.reset_index().Date):
                         new_data = pd.DataFrame(df[-1:].values, index=[today], columns=df.columns)
                         df = pd.concat([df, new_data])

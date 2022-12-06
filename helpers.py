@@ -10,6 +10,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from flask import current_app as app
 from bs4 import BeautifulSoup
 from requests import get
+from string import *
 
 
 #set memcache in Heroku
@@ -155,7 +156,6 @@ def get_list_of_crypto_currencies():
             crypto_symbols.remove(ele)
         except:
             pass
-    print(crypto_symbols)
     return mc.set("top_50_crypto", crypto_symbols)
 
 def get_list_of_top_world():
@@ -198,6 +198,25 @@ def top_40_mcap_world_higher_then_10pc_div():
             div_symbols.append(listing.get_text())
     return mc.set("top_div", div_symbols)
 
+def get_list_win_loss():
+    #getting list of top 100 crypto currencies
+    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
+    win_loss_symbols = []
+    win_loss_symbols_Url = 'https://finviz.com/'
+    r= get(win_loss_symbols_Url, headers=headers)
+    data=r.text
+    soup=BeautifulSoup(data, 'html.parser')
+    for listing in soup.find_all('a', attrs={'class':'tab-link'}):
+        win_loss_symbols.append(listing.get_text())
+    win_loss_signal = win_loss_symbols[:38]
+    for listing in soup.find_all('a', attrs={'class':'tab-link-nw'}):
+        win_loss_signal.append(listing.get_text())
+    win_loss_signal = [word for word in win_loss_signal if all([letter in ascii_uppercase for letter in word])]
+    win_loss_signal = sorted(set(win_loss_signal))
+    win_loss_trend = win_loss_symbols[38:102]
+    win_loss_trend = sorted(set(win_loss_trend))
+    mc.set("win_loss_signal", win_loss_signal)
+    mc.set("win_loss_trend", win_loss_trend)
 
 scheduler = BackgroundScheduler(timezone="Europe/London")
 
@@ -244,5 +263,14 @@ scheduler.add_job(
     day_of_week='mon-fri',
     hour=5,
     minute=20,
+)
+
+scheduler.add_job(
+    func=get_list_win_loss,
+    trigger="cron",
+    max_instances=1,
+    day_of_week='mon-sat',
+    hour=4,
+    minute=30,
 )
 scheduler.start()

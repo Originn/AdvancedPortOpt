@@ -15,63 +15,162 @@
     }
 </script>
 
+<div class="mytabs">
+  <input type="radio" id="graph" name="mytabs" checked="checked">
+  <label for="graph">Graph</label>
+  <div class="tab">
+    <div class="alert1">
+      <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span>
+      The following symbols have been removed due to low quality data: {{ listofna }}
+    </div>
+    <div align="center"; class="child"; id="plotly-timeseries"></div>
+    <script>
+    var graph = {{ plot_json_graph | safe }};
+    Plotly.plot('plotly-timeseries', graph, {});
+    </script>
 
-<div class="alert1">
-  <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span>
-  The following symbols have been removed due to low quality data: {{ listofna }}
+    <div align="center"; id="plotly-timeseries1"></div>
+    <script>
+    graph = {{ plot_json_exp_cov | safe }};
+    Plotly.plot('plotly-timeseries1', graph, {});
+    </script>
+
+    <div align="center"; id="plotly-timeseries2"></div>
+    <script>
+    graph = {{ plot_json_Ledoit_Wolf | safe }};
+    Plotly.plot('plotly-timeseries2', graph, {});
+    </script>
+  </div>
+
+  <input type="radio" id="Mean-variance" name="mytabs">
+  <label for="Mean-variance">Mean-variance optimization</label>
+  <div class="tab">
+    <p>&nbsp;</p>
+    <h4>Long Mean-variance optimization</h4>
+    <h6>(good for crypto portfolios optimization, as there is no expected returns)</h6>
+    <p>&nbsp;</p>
+    <div id="plotly-timeseries3"></div>
+    <script>
+    graph = {{ plot_json_weights_min_vol_long | safe }};
+    Plotly.plot('plotly-timeseries3', graph, {});
+    </script>
+
+    <div id="plotly-timeseries4"></div>
+    <script>
+    graph = {{ plot_json_dist_min_vol_long | safe }};
+    Plotly.plot('plotly-timeseries4', graph, {});
+    </script>
+    <p>Expected annual volatility: {{ av_min_vol_long }}%</p>
+    <div class="alert alert-success" role="alert">
+      <h4>If you happy with the suggested portfolio, the following output will show how many stocks to buy and the leftover funds</h4>
+      <p style="color:red;">Please note that the symbols prices may change between the time it takes to choose your portfolio</p>
+      <P>{{ alloc_min_vol_long }}</P>
+      <p>{{ "$%.2f" | format(leftover_min_vol_long) }} leftover</p>
+      <form action="/allocation" method="post">
+        <input type="hidden" name="form_name" value="alloc_min_vol_long">
+        <button class="btn btn-primary" onclick="this.form.submit(); myFunction()" id="btn1">Buy</button>
+      </form>
+    </div>
+    <p>&nbsp;</p>
+    <h4>Long/short Mean-variance optimization</h4>
+    <h6>(good for crypto portfolios optimization, as there is no expected returns)</h6>
+    <div id="plotly-timeseries5"></div>
+    <script>
+    graph = {{ plot_json_weight_min_vol_long_short | safe }};
+    Plotly.plot('plotly-timeseries5', graph, {});
+    </script>
+
+    <p>Expected annual volatility: {{ av }}%</p>
+    <div class="alert alert-success" role="alert">
+      <h4>If you happy with the suggested portfolio, the following output will show how many stocks to buy and the leftover funds (short positions not currently supported on the website)</h4>
+      <p style="color:red;">Please note that the symbols prices may change between the time it takes to choose your portfolio</p>
+      <P>{{ alloc_min_vol_long_short }}</P>
+      <p>{{ "$%.2f" | format(leftover_min_vol_long_short) }} leftover</p>
+    </div>
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+    <h4>Maximise return for a given risk  ({{ volatility }}%), with L2 regularisation = ({{ gamma }})</h4>
+    <div id="plotly-timeseries6"></div>
+    <script>
+    graph = {{ plot_json_L2_weights | safe }};
+    Plotly.plot('plotly-timeseries6', graph, {});
+    </script>
+    <div id="plotly-timeseries7"></div>
+    <script>
+    graph = {{ plot_json_L2_port | safe }};
+    Plotly.plot('plotly-timeseries7', graph, {});
+    </script>
+    <p>{{ num_small | safe}}</p>
+    <p>Expected annual return: {{ "%.2f" | format(perf_L2[0]*100) }}%</p>
+    <p>Annual volatility: {{ "%.2f" | format(perf_L2[1]*100) }}%</p>
+    <p>Sharpe Ratio: {{ "%.2f" | format(perf_L2[2]) }}</p>
+    <div class="alert alert-success" role="alert">
+      <h4>If you happy with the suggested portfolio, the following output will show how many stocks to buy and the leftover funds</h4>
+      <p style="color:red;">Please note that the symbols prices may change between the time it takes to choose your portfolio</p>
+      <P>{{ alloc_L2 }}</P>
+      <p>{{ "$%.2f" | format(leftover_L2) }} leftover</p>
+      <form action="/allocation" method="post">
+        <input type="hidden" name="form_name" value="alloc_L2"></input>
+        <button class="btn btn-primary" onclick="this.form.submit(); myFunction()" id="btn2">Buy</button>
+      </form>
+    </div>
+    </div>
+
+  <input type="radio" id="semi-variance optimization" name="mytabs">
+  <label for="semi-variance optimization">Semi-variance optimization</label>
+  <div class="tab">
+    <p>&nbsp;</p>
+    <h4>Efficient semi-variance optimization</h4>
+    <p>Here we will minimise the portfolio semivariance (i.e downside volatility) subject to a return constraint ({{ ret }}%).</p>
+    <div id="plotly-timeseries8"></div>
+    <script>
+    graph = {{ plot_json_semi_v | safe }};
+    Plotly.plot('plotly-timeseries8', graph, {});
+    </script>
+    <p>Expected annual return: {{ "%.2f" | format(perf_semi_v[0]*100) }}%</p>
+    <p>Annual semi-deviation: {{ "%.2f" | format(perf_semi_v[1]*100) }}%</p>
+    <p>Sortino Ratio: {{ "%.2f" | format(perf_semi_v[2]) }}</p>
+    <div class="alert alert-success" role="alert">
+      <h4>If you happy with the suggested portfolio, the following output will show how many stocks to buy and the leftover funds</h4>
+      <p style="color:red;">Please note that the symbols prices may change between the time it takes to choose your portfolio</p>
+      <P>{{ alloc_semi_v }}</P>
+      <p>{{ "$%.2f" | format(leftover_semi_v) }} leftover</p>
+      <form action="/allocation" method="post">
+        <input type="hidden" name="form_name" value="alloc_semi_v">
+        <button class="btn btn-primary" onclick="this.form.submit(); myFunction()" id="btn3">Buy</button>
+      </form>
+    </div>
+
+  </div>
+
+  <input type="radio" id="cvar" name="mytabs">
+  <label for="cvar">CVaR optimization</label>
+  <div class="tab">
+    <h2>CVaR</h2>
+    <h4>Efficient CVaR optimization</h4>
+    <div id="plotly-timeseries9"></div>
+    <script>
+    graph = {{ plot_json_cvar | safe }};
+    Plotly.plot('plotly-timeseries9', graph, {});
+    </script>
+    <p>VaR: {{ "%.2f" | format(var*100) }}%</p>
+    <p>CVaR: {{ "%.2f" | format(cvar*100) }}%</p>
+    <p>This value of the CVaR means that our average loss on the worst 5% of days will be {{ "%.2f" | format(cvar*100) }}%</p>
+    <p>As minimum CVaR value was set to {{ cvar_value }}% the following portfolio is suggested:</p>
+    <p>Expected annual return: {{ "%.2f" | format(min_cvar_rtn*100) }}%</p>
+    <p>Conditional Value at Risk {{ "%.2f" | format(min_cvar_risk*100) }}%</p>
+    <div class="alert alert-success" role="alert">
+      <h4>If you happy with the suggested portfolio, the following output will show how many stocks to buy and the leftover funds</h4>
+      <p style="color:red;">Please note that the symbols prices may change between the time it takes to choose your portfolio</p>
+      <P>{{ alloc_cvar }}</P>
+      <p>{{ "$%.2f" | format(leftover_cvar) }} leftover</p>
+      <form action="/allocation" method="post">
+        <input type="hidden" name="form_name" value="alloc_cvar">
+        <button class="btn btn-primary" onclick="this.form.submit(); myFunction()" id="btn4">Buy</button>
+      </form>
+    </div>
+  </div>
 </div>
 
 
-<div align="left"; class="child"; id="plotly-timeseries"></div>
-<script>
-var graph = {{ plot_json | safe }};
-Plotly.plot('plotly-timeseries', graph, {});
-</script>
-
-<div id="plotly-timeseries1"></div>
-<script>
-var graph = {{ plot_json1 | safe }};
-Plotly.plot('plotly-timeseries1', graph, {});
-</script>
-
-<div id="plotly-timeseries2"></div>
-<script>
-var graph = {{ plot_json2 | safe }};
-Plotly.plot('plotly-timeseries2', graph, {});
-</script>
-
-
-<h4>Maximise return for a given risk  ({{ volatility }}%), with L2 regularisation = ({{ gamma }})</h4>
-<div id="plotly-timeseries5"></div>
-<script>
-var graph = {{ plot_json5 | safe }};
-Plotly.plot('plotly-timeseries5', graph, {});
-</script>
-<p>Expected annual return: {{ "%.2f" | format(perf[0]*100) }}%</p>
-<p>Annual volatility: {{ "%.2f" | format(perf[1]*100) }}%</p>
-<p>Sharpe Ratio: {{ "%.2f" | format(perf[2]) }}</p>
-<div class="alert alert-success" role="alert">
-  <h4>If you happy with the suggested portfolio, the following output will show how many stocks to buy and the leftover funds</h4>
-  <p style="color:red;">Please note that the symbols prices may change between the time it takes to choose your portfolio</p>
-  <P>{{ alloc1 }}</P>
-  <p>{{ "$%.2f" | format(leftover1) }} leftover</p>
-  <form action="/allocation1" method="post">
-    <button class="btn btn-primary" onclick="this.form.submit(); myFunction()" id="btn2">Buy</button>
-  </form>
-</div>
-
-<h4>Efficient semi-variance optimization</h4>
-<p>Here we will minimise the portfolio semivariance (i.e downside volatility) subject to a return constraint ({{ ret }}%).</p>
-<p>Expected annual return: {{ "%.2f" | format(perf2[0]*100) }}%</p>
-<p>Annual semi-deviation: {{ "%.2f" | format(perf2[1]*100) }}%</p>
-<p>Sortino Ratio: {{ "%.2f" | format(perf2[2]) }}</p>
-<div class="alert alert-success" role="alert">
-  <h4>If you happy with the suggested portfolio, the following output will show how many stocks to buy and the leftover funds</h4>
-  <p style="color:red;">Please note that the symbols prices may change between the time it takes to choose your portfolio</p>
-  <P>{{ alloc2 }}</P>
-  <p>{{ "$%.2f" | format(leftover2) }} leftover</p>
-  <form action="/allocation2" method="post">
-    <button class="btn btn-primary" onclick="this.form.submit(); myFunction()" id="btn3">Buy</button>
-  </form>
-</div>
 {% endblock %}

@@ -14,10 +14,12 @@
   <input id="myInput" type="text" name="stock" placeholder="Company Name">
 </div>
 <div style="width: 60%; float:right">
-    <input type="button" style="width: 40%; height: 40px; font-size: 13px" value="Top 50 crypto coins" name="no" onclick="enter_crypto()"/>
-    <input type="button" style="width: 40%; height: 40px; font-size: 13px" value="Top 60 world stocks" name="no1" onclick="enter_world()"/>
-    <input type="button" style="width: 40%; height: 40px; font-size: 13px" value="Top 40 US stocks" name="no2" onclick="enter_US()"/>
-    <input type="button" style="text-align: center; width: 40%; height: 40px; font-size: 13px" value="Top 40 mcap +10% div" name="no3" onclick="enter_top_div()"/>
+    <input type="button" style="width: 40%; height: 40px; font-size: 13px" value="Top 50 crypto coins" onclick="enter_crypto()"/>
+    <input type="button" style="width: 40%; height: 40px; font-size: 13px" value="Top 60 world stocks" onclick="enter_world()"/>
+    <input type="button" style="width: 40%; height: 40px; font-size: 13px" value="Top 40 US stocks" onclick="enter_US()"/>
+    <input type="button" style="text-align: center; width: 40%; height: 40px; font-size: 13px" value="Top 40 mcap +10% div" onclick="enter_top_div()"/>
+    <input type="button" style="width: 40%; height: 40px; font-size: 13px" value="Finviz news signal" onclick="win_loss_signal()"/>
+    <input type="button" style="width: 40%; height: 40px; font-size: 13px" value="Finviz trend signal" onclick="win_loss_trend()"/>
 </div>
 <div class="form-group">
     <textarea rows=10 id="myTxt" class="form-control" name="symbols" placeholder="symbols" type="text">{{ cached_symbols }}</textarea>
@@ -45,15 +47,19 @@
             <input autocomplete="off" value="0.1" class="form-control" name="gamma" placeholder="gamma" type="number" step=".1" min="0" max="10">
         </div>
 
+<h3>Please enter your CVaR constraint</h3>
+        <div class="form-group">
+            <input autocomplete="off" value="2.5" class="form-control" name="cvar" placeholder="cvar" type="number" min="0">%
+        </div>
+
 <h3> Please enter target annual rate of return</h3>
         <div class="form-group">
             <input autocomplete="off" value="10" class="form-control" name="return" placeholder="rate of return" type="number" min="1">%
         </div>
-        <button onClick="this.form.submit(); this.disabled=true; this.value='Sending…'; " class="btn btn-primary" type="submit">Build</button>
+        <button onClick="this.form.submit(); this.disabled=true; this.value='Sending…';" class="btn btn-primary" type="submit">Build</button>
 </form>
 <script>
     document.querySelector("#today").valueAsDate = new Date();
-    document.getElementById('textboxid').style.height="200px";
 
     const tx = document.getElementsByTagName("textarea");
     for (let i = 0; i < tx.length; i++) {
@@ -66,6 +72,7 @@
         this.style.height = (this.scrollHeight) + "px";
     }
 </script>
+
 <script>
     $("textarea").each(function () {
         this.setAttribute("style", "height:" + (this.scrollHeight) + "px;overflow-y:hidden;");
@@ -195,6 +202,17 @@ function enter_US()
   document.getElementById("myTxt").value += {{ top_US_stocks | safe }}.join().split(",").join("\n") + "\n";
 }
 
+
+function win_loss_signal()
+{
+  document.getElementById("myTxt").value += {{ win_loss_signal | safe }}.join().split(",").join("\n") + "\n";
+}
+
+function win_loss_trend()
+{
+  document.getElementById("myTxt").value += {{ win_loss_trend | safe }}.join().split(",").join("\n") + "\n";
+}
+
 function enter_top_div()
 {
   document.getElementById("myTxt").value += {{ top_div | safe }}.join().split(",").join("\n") + "\n";
@@ -206,4 +224,8 @@ autocomplete(document.getElementById("myInput"), company_name);
 </script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
+
+
 {% endblock %}
