@@ -713,6 +713,7 @@ def result_alloc():
 
 @app.route('/status')
 def thread_status():
+    global global_dict
     userId = session['user_id']
     return jsonify(dict(status=('finished' if (global_dict[int(userId)]['finished'] == 'True') else 'running')))
 
