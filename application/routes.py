@@ -401,11 +401,11 @@ def build():
         global global_dict
         userId = session['user_id']
         global_dict[int(userId)] = {}
+        global_dict[int(userId)]['finished'] = 'False'
         tickers = request.form.get("symbols")
         tickers = tickers.split()
         @copy_current_request_context
         def operation(global_dict, session):
-            global_dict[int(userId)]['finished'] = 'False'
             symbols = request.form.get("symbols")
             mc.set(str(session['user_id']) + "_symbols", symbols)
             if contains_multiple_words(symbols) == False:
