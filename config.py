@@ -1,11 +1,13 @@
 """Flask config."""
-import os, redis
+import os
 from dotenv import load_dotenv
 from urllib.parse import urlparse
 
 
+
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
+
 
 class Config:
     """Flask configuration variables."""
@@ -21,9 +23,3 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     TEMPLATES_AUTO_RELOAD = True
     SESSION_PERMANENT = False
-    SESSION_TYPE = "redis"
-    if 'HEROKU' in os.environ:
-        url = urlparse(os.environ.get("REDIS_TLS_URL"))
-    else:
-        url = urlparse(os.environ.get("REDIS_URL"))
-    SESSION_REDIS = redis.Redis(host=url.hostname, port=url.port, username=url.username, password=url.password, ssl=True, ssl_cert_reqs=None)

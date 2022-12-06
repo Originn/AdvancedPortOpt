@@ -59,7 +59,7 @@ win_loss_trend = mc.get("win_loss_trend")
 users_stocks = [[sn, s] for sn, s in db.session.query(Stocks.shortname, Stocks.symbol)]
 nasdaq_exchange_info.extend(users_stocks)
 
-Session(app)
+#Session(app)
 
 @app.route("/")
 @login_required
@@ -717,7 +717,6 @@ def thread_status():
 def allocation():
     @copy_current_request_context
     def start_allocation(global_dict, session):
-        print('started')
         userId = session['user_id']
         global_dict[int(userId)]['finished'] = 'False'
         alloc=global_dict[int(userId)][request.form.get('form_name')]
@@ -837,10 +836,7 @@ def test():
             dftest=dftest.loc[:, dftest.columns.isin(list(alloc2.keys()))]
             #create a total value df where we can see the value of the portfolio on each day
             df1 = dftest.dot(pd.Series(alloc2))+leftover2
-            #print(df1)
-            #print(dftest)
             max_profit_value=df1.max()-10000
-            print(max_profit_value)
             totalprice=0
             totalnewprice=0
             #check what is the value of the stocks today
@@ -854,8 +850,6 @@ def test():
                 totalprice += sharesPrice
             #what is thevalue of the portfolio today
             profitloss=totalnewprice-totalprice+leftover2
-            print(profitloss)
-            input()
             new_test=Test(request.form.get("start"), request.form.get("end"), list(alloc2.keys()), profitloss, session["user_id"], profit_date, method, max_profit_value, target_profit, gamma)
             db.session.add(new_test)
             db.session.commit()
