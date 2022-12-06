@@ -653,7 +653,8 @@ def build():
             global_dict[int(userId)]['finished'] = 'True'
         Thread(target=operation, args=[global_dict, session], name = str(session['user_id'])+'_operation_thread').start()
 
-        def enter_sql_data(app, nasdaq_exchange_info, tickers):
+        @copy_current_request_context
+        def enter_sql_data(nasdaq_exchange_info, tickers):
             for ticker in tickers:
                 ticker=ticker.upper()
                 if any(sublist[1]==ticker in sublist for sublist in nasdaq_exchange_info) is False:
@@ -661,16 +662,14 @@ def build():
                     if not ticker_ln:
                         ticker_ln = ticker
                     ticker_list=[ticker_ln, ticker]
-                    with app.app_context():
-                        new_stock=Stocks(ticker, ticker_ln)
-                        db.session.add(new_stock)
-                        db.session.commit()
+                    new_stock=Stocks(ticker, ticker_ln)
+                    db.session.add(new_stock)
+                    db.session.commit()
                     nasdaq_exchange_info.extend([ticker_list])
         global nasdaq_exchange_info
-        app1 = app._get_current_object()
         tickers = request.form.get("symbols")
         tickers = tickers.split()
-        Thread(target=enter_sql_data, args=[app1, nasdaq_exchange_info, tickers], name=str(session['user_id'])+'_sql_thread').start()
+        Thread(target=enter_sql_data, args=[nasdaq_exchange_info, tickers], name=str(session['user_id'])+'_sql_thread').start()
         return render_template("loading.html")
     else:
         if mc.get(str(session['user_id']) + "_symbols"):
