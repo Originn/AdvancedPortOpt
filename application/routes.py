@@ -646,7 +646,12 @@ def build():
             global_dict[int(userId)]['var'] = portfolio_rets.quantile(0.05)
             global_dict[int(userId)]['cvar'] = portfolio_rets[portfolio_rets <= global_dict[int(userId)]['var']].mean()
             ec = EfficientCVaR(mu, returns)
-            ec.efficient_risk(target_cvar=float(request.form.get("cvar"))/100)
+            try:
+                ec.efficient_risk(target_cvar=float(request.form.get("cvar"))/100)
+            except:
+                global_dict[int(userId)]['finished'] = 'True'
+                global_dict[int(userId)]['error'] = "CVaR can't be performed with the current specifications"
+                return
             weights = ec.clean_weights()
             da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
             global_dict[int(userId)]['alloc_cvar'], global_dict[int(userId)]['leftover_cvar'] = da.lp_portfolio()
