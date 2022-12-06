@@ -399,6 +399,8 @@ def expected_returns():
 def build():
     if request.method == "POST":
         global global_dict
+        tickers = request.form.get("symbols")
+        tickers = tickers.split()
         @copy_current_request_context
         def operation(global_dict, session):
             userId = session['user_id']
@@ -667,8 +669,6 @@ def build():
                     db.session.commit()
                     nasdaq_exchange_info.extend([ticker_list])
         global nasdaq_exchange_info
-        tickers = request.form.get("symbols")
-        tickers = tickers.split()
         Thread(target=enter_sql_data, args=[nasdaq_exchange_info, tickers], name=str(session['user_id'])+'_sql_thread').start()
         return render_template("loading.html")
     else:
