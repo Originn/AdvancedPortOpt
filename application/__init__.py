@@ -6,6 +6,7 @@ from flask_session import Session
 
 
 
+
 def init_app():
     """Construct core Flask application."""
     app = Flask(__name__, instance_relative_config=False)
@@ -36,6 +37,7 @@ def init_app():
                                })
         )
     Session(app)
+
     with app.app_context():
         # Import parts of our core Flask app
         from . import routes

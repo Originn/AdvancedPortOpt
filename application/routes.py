@@ -1,5 +1,5 @@
 from flask import current_app as app
-from flask import render_template
+from flask import render_template, g
 from helpers import login_required
 from werkzeug.exceptions import default_exceptions, HTTPException, InternalServerError
 from flask import Flask, flash, redirect, render_template, request, session, url_for, copy_current_request_context, jsonify
@@ -27,8 +27,7 @@ from threading import Thread
 
 
 global_dict = {}
-t1 = None
-t2 = None
+
 yf.pdr_override()
 # Ensure responses aren't cached
 @app.after_request
@@ -398,7 +397,8 @@ def expected_returns():
 @app.route("/build",methods=["GET", "POST"])
 @login_required
 def build():
-    userId =session.get('user_id')
+    global userId
+    userId = session['user_id']
     if request.method == "POST":
         global global_dict
         global_dict[int(userId)] = {}
@@ -599,6 +599,7 @@ def build():
                 global_dict[int(userId)]['error'] = str(e)
                 return
 
+
             #if we want to buy the portfolio mentioned above
             da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
             alloc, global_dict[int(userId)]['leftover_L2'] = da.lp_portfolio()
@@ -675,7 +676,7 @@ def build():
                     db.session.add(new_stock)
                     db.session.commit()
                     nasdaq_exchange_info.extend([ticker_list])
-        global nasdaq_exchange_info
+        #global nasdaq_exchange_info
         global t2
         t2 = Thread(target=enter_sql_data, args=[nasdaq_exchange_info, tickers], name=str(userId)+'_sql_thread')
         t2.start()
@@ -691,8 +692,9 @@ def build():
 
 @app.route('/result')
 def result():
+    t1.join()
+    t2.join()
     try:
-        userId=session.get('user_id')
         return render_template("built.html", num_small=global_dict[int(userId)]['num_small'], plot_json_weights_min_vol_long=global_dict[int(userId)]['plot_json_weights_min_vol_long'], av_min_vol_long=global_dict[int(userId)]['av_min_vol_long'], leftover_min_vol_long=global_dict[int(userId)]['leftover_min_vol_long'], alloc_min_vol_long = global_dict[int(userId)]['alloc_min_vol_long'], plot_json_dist_min_vol_long=global_dict[int(userId)]['plot_json_dist_min_vol_long'], av = global_dict[int(userId)]['av'], leftover_min_vol_long_short=global_dict[int(userId)]['leftover_min_vol_long_short'], alloc_min_vol_long_short=global_dict[int(userId)]['alloc_min_vol_long_short'], ret=global_dict[int(userId)]['ret'],gamma=global_dict[int(userId)]['gamma'],volatility=global_dict[int(userId)]['volatility'], perf_L2=global_dict[int(userId)]['perf_L2'], perf_semi_v=global_dict[int(userId)]['perf_semi_v'], alloc_L2=global_dict[int(userId)]['alloc_L2'], alloc_semi_v=global_dict[int(userId)]['alloc_semi_v'], plot_json_graph=global_dict[int(userId)]['plot_json_graph'], plot_json_exp_cov=global_dict[int(userId)]['plot_json_exp_cov'], plot_json_Ledoit_Wolf=global_dict[int(userId)]['plot_json_Ledoit_Wolf'], plot_json_weight_min_vol_long_short=global_dict[int(userId)]['plot_json_weight_min_vol_long_short'], plot_json_L2_weights=global_dict[int(userId)]['plot_json_L2_weights'], plot_json_L2_port = global_dict[int(userId)]['plot_json_L2_port'], plot_json_semi_v = global_dict[int(userId)]['plot_json_semi_v'], leftover_L2=global_dict[int(userId)]['leftover_L2'], leftover_semi_v=global_dict[int(userId)]['leftover_semi_v'],listofna=(', '.join(global_dict[int(userId)]['listofna'])), min_cvar_rtn = global_dict[int(userId)]['target_CVaR_exp_rtn'], min_cvar_risk = global_dict[int(userId)]['target_CVaR_cond_val_risk'], var = global_dict[int(userId)]['var'], cvar = global_dict[int(userId)]['cvar'], plot_json_cvar=global_dict[int(userId)]['plot_json_cvar'], cvar_value=global_dict[int(userId)]['cvar_value'], alloc_cvar = global_dict[int(userId)]['alloc_cvar'], leftover_cvar = global_dict[int(userId)]['leftover_cvar'])
     except:
         try:
@@ -717,16 +719,6 @@ def result_alloc():
 
 @app.route('/status')
 def thread_status():
-    global t1
-    global t2
-    try:
-        t1.join()
-        t2.join()
-        print('joined')
-    except:
-        print('not joined')
-    userId =session.get('user_id')
-    global global_dict
     return jsonify(dict(status=('finished' if (global_dict[int(userId)]['finished'] == 'True') else 'running')))
 
 @app.route("/allocation", methods=["POST"])
@@ -734,7 +726,7 @@ def thread_status():
 def allocation():
     @copy_current_request_context
     def start_allocation(global_dict, session):
-        userId = session.get('user_id')
+        userId = userId
         global_dict[int(userId)]['finished'] = 'False'
         alloc=global_dict[int(userId)][request.form.get('form_name')]
         for key, value in alloc.items():
@@ -771,7 +763,7 @@ def allocation():
                 Users.query.filter_by(id=session["user_id"]).update({'cash':availableCash-(amount*price)})
         db.session.commit()
         global_dict[int(userId)]['finished'] = 'True'
-    Thread(target=start_allocation, args=[global_dict, session], name=str(session.get('user_id'))+'_allocation_thread').start()
+    Thread(target=start_allocation, args=[global_dict, session], name=str(userId)+'_allocation_thread').start()
     return render_template("loading_alloc.html")
 
 @app.route("/sell_all", methods=["GET", "POST"])
