@@ -717,8 +717,14 @@ def result_alloc():
 
 @app.route('/status')
 def thread_status():
-    t1.join()
-    t2.join()
+    global t1
+    global t2
+    try:
+        t1.join()
+        t2.join()
+        print('joined')
+    except:
+        print('not joined')
     userId =session.get('user_id')
     global global_dict
     #userId = current_session['user_id']
