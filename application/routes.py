@@ -27,7 +27,8 @@ from threading import Thread
 
 
 global_dict = {}
-
+t1 = None
+t2 = None
 yf.pdr_override()
 # Ensure responses aren't cached
 @app.after_request
@@ -598,7 +599,6 @@ def build():
                 global_dict[int(userId)]['error'] = str(e)
                 return
 
-
             #if we want to buy the portfolio mentioned above
             da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
             alloc, global_dict[int(userId)]['leftover_L2'] = da.lp_portfolio()
@@ -658,7 +658,9 @@ def build():
             global_dict[int(userId)]['target_CVaR_exp_rtn'], global_dict[int(userId)]['target_CVaR_cond_val_risk'] = ec.portfolio_performance()
             mc.delete(str(session['user_id']) + "_symbols")
             global_dict[int(userId)]['finished'] = 'True'
-        Thread(target=operation, args=[global_dict, session], name = str(session['user_id'])+'_operation_thread').start()
+        global t1
+        t1 = Thread(target=operation, args=[global_dict, session], name = str(session['user_id'])+'_operation_thread')
+        t1.start()
 
         @copy_current_request_context
         def enter_sql_data(nasdaq_exchange_info, tickers):
@@ -674,7 +676,9 @@ def build():
                     db.session.commit()
                     nasdaq_exchange_info.extend([ticker_list])
         global nasdaq_exchange_info
-        Thread(target=enter_sql_data, args=[nasdaq_exchange_info, tickers], name=str(session['user_id'])+'_sql_thread').start()
+        global t2
+        t2 = Thread(target=enter_sql_data, args=[nasdaq_exchange_info, tickers], name=str(session['user_id'])+'_sql_thread')
+        t2.start()
         return render_template("loading.html")
     else:
         if mc.get(str(session['user_id']) + "_symbols"):
@@ -688,14 +692,20 @@ def build():
 @app.route('/result')
 def result():
     try:
+        t1.join()
+        t2.join()
         userId=session['user_id']
         return render_template("built.html", num_small=global_dict[int(userId)]['num_small'], plot_json_weights_min_vol_long=global_dict[int(userId)]['plot_json_weights_min_vol_long'], av_min_vol_long=global_dict[int(userId)]['av_min_vol_long'], leftover_min_vol_long=global_dict[int(userId)]['leftover_min_vol_long'], alloc_min_vol_long = global_dict[int(userId)]['alloc_min_vol_long'], plot_json_dist_min_vol_long=global_dict[int(userId)]['plot_json_dist_min_vol_long'], av = global_dict[int(userId)]['av'], leftover_min_vol_long_short=global_dict[int(userId)]['leftover_min_vol_long_short'], alloc_min_vol_long_short=global_dict[int(userId)]['alloc_min_vol_long_short'], ret=global_dict[int(userId)]['ret'],gamma=global_dict[int(userId)]['gamma'],volatility=global_dict[int(userId)]['volatility'], perf_L2=global_dict[int(userId)]['perf_L2'], perf_semi_v=global_dict[int(userId)]['perf_semi_v'], alloc_L2=global_dict[int(userId)]['alloc_L2'], alloc_semi_v=global_dict[int(userId)]['alloc_semi_v'], plot_json_graph=global_dict[int(userId)]['plot_json_graph'], plot_json_exp_cov=global_dict[int(userId)]['plot_json_exp_cov'], plot_json_Ledoit_Wolf=global_dict[int(userId)]['plot_json_Ledoit_Wolf'], plot_json_weight_min_vol_long_short=global_dict[int(userId)]['plot_json_weight_min_vol_long_short'], plot_json_L2_weights=global_dict[int(userId)]['plot_json_L2_weights'], plot_json_L2_port = global_dict[int(userId)]['plot_json_L2_port'], plot_json_semi_v = global_dict[int(userId)]['plot_json_semi_v'], leftover_L2=global_dict[int(userId)]['leftover_L2'], leftover_semi_v=global_dict[int(userId)]['leftover_semi_v'],listofna=(', '.join(global_dict[int(userId)]['listofna'])), min_cvar_rtn = global_dict[int(userId)]['target_CVaR_exp_rtn'], min_cvar_risk = global_dict[int(userId)]['target_CVaR_cond_val_risk'], var = global_dict[int(userId)]['var'], cvar = global_dict[int(userId)]['cvar'], plot_json_cvar=global_dict[int(userId)]['plot_json_cvar'], cvar_value=global_dict[int(userId)]['cvar_value'], alloc_cvar = global_dict[int(userId)]['alloc_cvar'], leftover_cvar = global_dict[int(userId)]['leftover_cvar'])
     except:
         try:
+            t1.join()
+            t2.join()
             return_error = str(global_dict[int(userId)]['error'])
             flash(return_error)
             return redirect("/build")
         except:
+            t1.join()
+            t2.join()
             return redirect("/build")
 
 
