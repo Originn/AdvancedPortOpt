@@ -660,7 +660,7 @@ def build():
             mc.delete(str(userId) + "_symbols")
             global_dict[int(userId)]['finished'] = 'True'
         global t1
-        t1 = Thread(target=operation, args=[global_dict, session], name = str(userId)+'_operation_thread')
+        t1 = Thread(target=operation, args=[global_dict, session], name = str(userId)+'_operation_thread', daemon=True)
         t1.start()
 
         @copy_current_request_context
@@ -678,7 +678,7 @@ def build():
                     nasdaq_exchange_info.extend([ticker_list])
         #global nasdaq_exchange_info
         global t2
-        t2 = Thread(target=enter_sql_data, args=[nasdaq_exchange_info, tickers], name=str(userId)+'_sql_thread')
+        t2 = Thread(target=enter_sql_data, args=[nasdaq_exchange_info, tickers], name=str(userId)+'_sql_thread', daemon=True)
         t2.start()
         return render_template("loading.html")
     else:
