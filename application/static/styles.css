@@ -320,8 +320,6 @@ input[type=button] {
   padding: 20px 30px;
   border-radius: 3px;
   margin:5px;
-  border-bottom-style: solid;
-  border-bottom-width: 3px;
   transition: text-shadow 0.3s ease;
   background: #e2e2e2;
 }
@@ -333,7 +331,7 @@ input[type=button] {
 }
 
 .mytabs label:hover {
-  text-shadow: 2px 2px 0px rgba(0,0,0,.3)
+  box-shadow: 2px 5px #888888
 }
 
 .mytabs .tab {

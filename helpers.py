@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 from requests import get
 from string import *
 
+sched = BackgroundScheduler()
 
 #set memcache in Heroku
 servers = os.environ.get('MEMCACHIER_SERVERS', '').split(',')
@@ -139,65 +140,8 @@ def stock_splits_update(*args):
                 db.session.query(Records).filter(Records.symbol==stock, func.to_char(Records.execution_time.cast(Date), 'yyyy-mm-dd')<last_split_date).update({'number_of_shares': Records.number_of_shares*last_split_amount, 'purchase_p': Records.purchase_p/last_split_amount}, synchronize_session='fetch')
             db.session.commit()
 
-def get_list_of_crypto_currencies():
-    #getting list of top 100 crypto currencies
-    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
-    CryptoCurrenciesUrl = 'https://finance.yahoo.com/crypto/?count=50&offset=0'
-    r= get(CryptoCurrenciesUrl, headers=headers)
-    data=r.text
-    soup=BeautifulSoup(data, 'html.parser')
-    crypto_symbols = []
-    for listing in soup.find_all('a', attrs={'data-test':'quoteLink'}):
-        crypto_symbols.append(listing.get_text())
-    #removing stable coins
-    unwanted = ['USDC-USD', 'BUSD-USD', 'DAI-USD', 'USDP-USD', 'FRAX-USD', 'USDT-USD']
-    for ele in sorted(unwanted, reverse = True):
-        try:
-            crypto_symbols.remove(ele)
-        except:
-            pass
-    return mc.set("top_50_crypto", crypto_symbols)
 
-def get_list_of_top_world():
-    #getting list of top 100 crypto currencies
-    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
-    world_symbols = []
-    for i in range(1, 61, 20):
-        world_symbolsUrl = 'https://finviz.com/screener.ashx?v=111&o=-marketcap&r=' + str(i)
-        r= get(world_symbolsUrl, headers=headers)
-        data=r.text
-        soup=BeautifulSoup(data, 'html.parser')
-        for listing in soup.find_all('a', attrs={'class':'screener-link-primary'}):
-            world_symbols.append(listing.get_text())
-    return mc.set("top_world", world_symbols)
-
-
-def get_list_of_top_US():
-    #getting list of top 100 crypto currencies
-    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
-    US_symbols = []
-    for i in range(1, 41, 20):
-        US_symbolsUrl = 'https://finviz.com/screener.ashx?v=111&f=geo_usa&o=-marketcap&r=' + str(i)
-        r= get(US_symbolsUrl, headers=headers)
-        data=r.text
-        soup=BeautifulSoup(data, 'html.parser')
-        for listing in soup.find_all('a', attrs={'class':'screener-link-primary'}):
-            US_symbols.append(listing.get_text())
-    return mc.set("top_US", US_symbols)
-
-#gathering top 40 matket cap stocks with dividend higher then 10%
-def top_40_mcap_world_higher_then_10pc_div():
-    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
-    div_symbols = []
-    for i in range(1, 41, 20):
-        div_symbolsUrl = 'https://finviz.com/screener.ashx?v=111&f=fa_div_veryhigh&o=-marketcap&r=' + str(i)
-        r= get(div_symbolsUrl, headers=headers)
-        data=r.text
-        soup=BeautifulSoup(data, 'html.parser')
-        for listing in soup.find_all('a', attrs={'class':'screener-link-primary'}):
-            div_symbols.append(listing.get_text())
-    return mc.set("top_div", div_symbols)
-
+@sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=30)
 def get_list_win_loss():
     #getting list of top 100 crypto currencies
     headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
@@ -218,59 +162,66 @@ def get_list_win_loss():
     mc.set("win_loss_signal", win_loss_signal)
     mc.set("win_loss_trend", win_loss_trend)
 
-scheduler = BackgroundScheduler(timezone="Europe/London")
+@sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=28)
+#gathering top 40 matket cap stocks with dividend higher then 10%
+def top_40_mcap_world_higher_then_10pc_div():
+    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
+    div_symbols = []
+    for i in range(1, 41, 20):
+        div_symbolsUrl = 'https://finviz.com/screener.ashx?v=111&f=fa_div_veryhigh&o=-marketcap&r=' + str(i)
+        r= get(div_symbolsUrl, headers=headers)
+        data=r.text
+        soup=BeautifulSoup(data, 'html.parser')
+        for listing in soup.find_all('a', attrs={'class':'screener-link-primary'}):
+            div_symbols.append(listing.get_text())
+    return mc.set("top_div", div_symbols)
 
-scheduler.add_job(
-    func=symbol_search,
-    trigger="cron",
-    max_instances=1,
-    day_of_week='mon-fri',
-    hour=5,
-    minute=30,
-)
+@sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=26)
+def get_list_of_crypto_currencies():
+    #getting list of top 100 crypto currencies
+    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
+    CryptoCurrenciesUrl = 'https://finance.yahoo.com/crypto/?count=50&offset=0'
+    r= get(CryptoCurrenciesUrl, headers=headers)
+    data=r.text
+    soup=BeautifulSoup(data, 'html.parser')
+    crypto_symbols = []
+    for listing in soup.find_all('a', attrs={'data-test':'quoteLink'}):
+        crypto_symbols.append(listing.get_text())
+    #removing stable coins
+    unwanted = ['USDC-USD', 'BUSD-USD', 'DAI-USD', 'USDP-USD', 'FRAX-USD', 'USDT-USD']
+    for ele in sorted(unwanted, reverse = True):
+        try:
+            crypto_symbols.remove(ele)
+        except:
+            pass
+    return mc.set("top_50_crypto", crypto_symbols)
 
-scheduler.add_job(
-    func=top_40_mcap_world_higher_then_10pc_div,
-    trigger="cron",
-    max_instances=1,
-    day_of_week='mon-fri',
-    hour=4,
-    minute=55,
-)
+@sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=24)
+def get_list_of_top_world():
+    #getting list of top 100 crypto currencies
+    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
+    world_symbols = []
+    for i in range(1, 61, 20):
+        world_symbolsUrl = 'https://finviz.com/screener.ashx?v=111&o=-marketcap&r=' + str(i)
+        r= get(world_symbolsUrl, headers=headers)
+        data=r.text
+        soup=BeautifulSoup(data, 'html.parser')
+        for listing in soup.find_all('a', attrs={'class':'screener-link-primary'}):
+            world_symbols.append(listing.get_text())
+    return mc.set("top_world", world_symbols)
 
-scheduler.add_job(
-    func=get_list_of_top_world,
-    trigger="cron",
-    max_instances=1,
-    day_of_week='mon-fri',
-    hour=5,
-    minute=32,
-)
+@sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=22)
+def get_list_of_top_US():
+    #getting list of top 100 crypto currencies
+    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
+    US_symbols = []
+    for i in range(1, 41, 20):
+        US_symbolsUrl = 'https://finviz.com/screener.ashx?v=111&f=geo_usa&o=-marketcap&r=' + str(i)
+        r= get(US_symbolsUrl, headers=headers)
+        data=r.text
+        soup=BeautifulSoup(data, 'html.parser')
+        for listing in soup.find_all('a', attrs={'class':'screener-link-primary'}):
+            US_symbols.append(listing.get_text())
+    return mc.set("top_US", US_symbols)
 
-scheduler.add_job(
-    func=stock_splits_update,
-    trigger="cron",
-    max_instances=1,
-    day_of_week='mon-fri',
-    hour=5,
-    minute=15,
-)
-
-scheduler.add_job(
-    func=get_list_of_crypto_currencies,
-    trigger="cron",
-    max_instances=1,
-    day_of_week='mon-fri',
-    hour=5,
-    minute=20,
-)
-
-scheduler.add_job(
-    func=get_list_win_loss,
-    trigger="cron",
-    max_instances=1,
-    day_of_week='mon-sat',
-    hour=4,
-    minute=30,
-)
-scheduler.start()
+sched.start()
