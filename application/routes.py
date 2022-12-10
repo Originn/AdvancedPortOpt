@@ -23,13 +23,7 @@ from pypfopt import EfficientFrontier
 from multiprocessing import Process
 from pandas_datareader import data
 from threading import Thread
-import memory_profiler
-import threading
-import gc
-from concurrent.futures import ThreadPoolExecutor
 
-
-fp=open('memory_profiler.log','w+')
 
 yf.pdr_override()
 # Ensure responses aren't cached
@@ -399,7 +393,6 @@ def expected_returns():
 
 @app.route("/build",methods=["GET", "POST"])
 @login_required
-@memory_profiler.profile(stream=fp)
 def build():
     #thread_pool = ThreadPoolExecutor(max_workers=4)
     global_dict = {}
@@ -708,9 +701,6 @@ def build():
         #global nasdaq_exchange_info
         t2 = Thread(target=enter_sql_data, args=[nasdaq_exchange_info, tickers])
         t2.start()
-        t1.join()
-        t2.join()
-        #thread_pool.shutdown()
         return render_template("loading.html")
     else:
         cached_symbols = mc.get(str(userId) + "_symbols") if mc.get(str(userId) + "_symbols") else ''
