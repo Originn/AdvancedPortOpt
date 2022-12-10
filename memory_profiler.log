@@ -1,0 +1,933 @@
+Filename: /home/originn/layoutest/application/routes.py
+
+Line #    Mem usage    Increment  Occurrences   Line Contents
+=============================================================
+   400    185.8 MiB    185.8 MiB           1   @app.route("/build",methods=["GET", "POST"])
+   401                                         @login_required
+   402                                         @memory_profiler.profile(stream=fp)
+   403                                         def build():
+   404                                             #thread_pool = ThreadPoolExecutor(max_workers=4)
+   405    185.8 MiB      0.0 MiB           1       global_dict = {}
+   406    185.8 MiB      0.0 MiB           1       userId = session['user_id']
+   407    185.8 MiB      0.0 MiB           1       global_dict[int(userId)] = {}
+   408    185.8 MiB      0.0 MiB           1       if request.method == "POST":
+   409                                                 #global global_dict
+   410                                                 global_dict[int(userId)]['finished'] = 'False'
+   411                                                 tickers = request.form.get("symbols")
+   412                                                 tickers = list(set(tickers.split()))
+   413                                                 @copy_current_request_context
+   414                                                 def operation(global_dict, session):
+   415                                                     symbols = request.form.get("symbols")
+   416                                                     mc.set(str(userId) + "_symbols", symbols)
+   417                                                     symbols = list(set(symbols.split()))
+   418                                                     if contains_multiple_words(symbols) == False:
+   419                                                         global_dict[int(userId)]['finished'] = 'True'
+   420                                                         global_dict[int(userId)]['error'] = "The app purpose is to optimize a portfolio given a list of stocks. Please enter a list of stocks seperated by a new row."
+   421                                                         mc.set("global_dict", global_dict)
+   422                                                         return
+   423                                                     if float(request.form.get("funds")) <= 0 or float(request.form.get("funds")) == " ":
+   424                                                         global_dict[int(userId)]['finished'] = 'True'
+   425                                                         global_dict[int(userId)]['error'] = "Amount need to be a positive number"
+   426                                                         mc.set("global_dict", global_dict)
+   427                                                         return
+   428                                                     Build(session["user_id"], request.form.get("symbols").upper(), request.form.get("start"), request.form.get("end"), request.form.get("funds"), request.form.get("short"), request.form.get("volatility"), request.form.get("gamma"), request.form.get("return"))
+   429                                                     db.session.commit()
+   430                                                     try:
+   431                                                         mc.set(str(userId)+'start_date', request.form.get("start"))
+   432                                                         df = yf.download(symbols, start=request.form.get("start"), end=request.form.get("end"), auto_adjust = False, prepost = False, threads = True, proxy = None)["Adj Close"].dropna(axis=1, how='all')
+   433                                                         failed=(list(shared._ERRORS.keys()))
+   434                                                         df = df.replace(0, np.nan)
+   435                                                         try:
+   436                                                             global_dict[int(userId)]['listofna']=df.columns[df.isna().iloc[-2]].tolist()+failed
+   437                                                         except IndexError:
+   438                                                             global_dict[int(userId)]['finished'] = 'True'
+   439                                                             global_dict[int(userId)]['error'] = "Please enter valid stocks from Yahoo Finance."
+   440                                                             mc.set("global_dict", global_dict)
+   441                                                             return
+   442                                                         df = df.loc[:,df.iloc[-2,:].notna()]
+   443                                                     except ValueError:
+   444                                                         global_dict[int(userId)]['finished'] = 'True'
+   445                                                         global_dict[int(userId)]['error'] = "Please enter a valid symbols (taken from Yahoo Finance)"
+   446                                                         mc.set("global_dict", global_dict)
+   447                                                         return
+   448                                         
+   449                                                     prices = df.copy()
+   450                                                     fig = px.line(prices, x=prices.index, y=prices.columns)
+   451                                                     fig = fig.update_xaxes(rangeslider_visible=True)
+   452                                                     fig.update_layout(width=1350, height=900, title_text = 'Price Graph', title_x = 0.5)
+   453                                                     global_dict[int(userId)]['plot_json_graph'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   454                                         
+   455                                                     exp_cov = risk_models.exp_cov(prices, frequency=252)
+   456                                         
+   457                                                     #plotting the covariance matrix
+   458                                                     heat = go.Heatmap(
+   459                                                         z = risk_models.cov_to_corr(exp_cov),
+   460                                                         x = exp_cov.columns.values,
+   461                                                         y = exp_cov.columns.values,
+   462                                                         zmin = 0, # Sets the lower bound of the color domain
+   463                                                         zmax = 1,
+   464                                                         xgap = 1, # Sets the horizontal gap (in pixels) between bricks
+   465                                                         ygap = 1,
+   466                                                         colorscale = 'RdBu'
+   467                                                     )
+   468                                         
+   469                                                     title = 'Exponential covariance matrix'
+   470                                         
+   471                                                     layout = go.Layout(
+   472                                                         title_text=title,
+   473                                                         title_x=0.5,
+   474                                                         width=500,
+   475                                                         height=500,
+   476                                                         xaxis_showgrid=False,
+   477                                                         yaxis_showgrid=False,
+   478                                                         yaxis_autorange='reversed'
+   479                                                     )
+   480                                         
+   481                                                     fig=go.Figure(data=[heat], layout=layout)
+   482                                                     global_dict[int(userId)]['plot_json_exp_cov'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   483                                         
+   484                                         
+   485                                         
+   486                                                     S = risk_models.CovarianceShrinkage(prices).ledoit_wolf()
+   487                                         
+   488                                                     heat = go.Heatmap(
+   489                                                         z = risk_models.cov_to_corr(S),
+   490                                                         x = S.columns.values,
+   491                                                         y = S.columns.values,
+   492                                                         zmin = 0, # Sets the lower bound of the color domain
+   493                                                         zmax = 1,
+   494                                                         xgap = 1, # Sets the horizontal gap (in pixels) between bricks
+   495                                                         ygap = 1,
+   496                                                         colorscale = 'RdBu'
+   497                                                     )
+   498                                         
+   499                                                     title = 'Ledoit-Wolf shrinkage'
+   500                                         
+   501                                                     layout = go.Layout(
+   502                                                         title_text=title,
+   503                                                         title_x=0.5,
+   504                                                         width=500,
+   505                                                         height=500,
+   506                                                         xaxis_showgrid=False,
+   507                                                         yaxis_showgrid=False,
+   508                                                         yaxis_autorange='reversed'
+   509                                                     )
+   510                                         
+   511                                                     fig=go.Figure(data=[heat], layout=layout)
+   512                                                     global_dict[int(userId)]['plot_json_Ledoit_Wolf'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   513                                         
+   514                                         
+   515                                                     #Section 2 -Return estimation
+   516                                                     #it is often a bad idea to provide returns using a simple estimate like the mean of past returns. Research suggests that better off not providing expected returns – you can then just find the min_volatility() portfolio or use HRP.
+   517                                                     mu = pypfopt.expected_returns.capm_return(prices)
+   518                                         
+   519                                                     #using risk models optimized for the Efficient frontier to reduce to min volitility, good for crypto currencies ('long only')
+   520                                                     ef = EfficientFrontier(None, S)
+   521                                                     try:
+   522                                                         ef.min_volatility()
+   523                                                         weights = ef.clean_weights()
+   524                                                         nu = pd.Series(weights)
+   525                                                         fig = px.bar(nu, orientation='h')
+   526                                                         fig.update_layout(width=700, height=500, title_text = "Weights for minimum volatility (long only)", title_x = 0.5, showlegend=False, yaxis_title=None, xaxis_title=None)
+   527                                                         global_dict[int(userId)]['plot_json_weights_min_vol_long'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   528                                                         av=ef.portfolio_performance()[1]
+   529                                                         global_dict[int(userId)]['av_min_vol_long']=round(av*100, 2)
+   530                                         
+   531                                         
+   532                                                     #if we want to buy the portfolio mentioned above
+   533                                                         for col in prices.columns:
+   534                                                             if col.endswith(".L"):
+   535                                                                 prices.loc[:,col] = prices.loc[:,col]*GBPtoUSD()
+   536                                                         try:
+   537                                                             latest_prices = prices.iloc[-1]
+   538                                                         except IndexError:
+   539                                                             global_dict[int(userId)]['finished'] = 'True'
+   540                                                             global_dict[int(userId)]['error'] = "There is an issue with Yahoo API please try again later"
+   541                                                             mc.set("global_dict", global_dict)
+   542                                                             return
+   543                                                         # prices as of the day you are allocating
+   544                                                         if float(request.form.get("funds")) < float(latest_prices.min()):
+   545                                                             global_dict[int(userId)]['finished'] = 'True'
+   546                                                             global_dict[int(userId)]['error'] = "Amount is not high enough to cover the lowest priced stock"
+   547                                                             mc.set("global_dict", global_dict)
+   548                                                             return
+   549                                                         try:
+   550                                                             da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
+   551                                                             mc.set(str(userId) + '_funds', float(request.form.get("funds")))
+   552                                                         except TypeError:
+   553                                                             delisted=prices.columns[df.isna().any()].tolist()
+   554                                                             delisted= ", ".join(delisted)
+   555                                                             global_dict[int(userId)]['finished'] = 'True'
+   556                                                             global_dict[int(userId)]['error'] = "Can't get latest prices for the following stock/s, please remove to contiue :" + delisted
+   557                                                             mc.set("global_dict", global_dict)
+   558                                                             return
+   559                                                         alloc, global_dict[int(userId)]['leftover_min_vol_long'] = da.lp_portfolio()
+   560                                                         global_dict[int(userId)]['alloc_min_vol_long']=alloc
+   561                                                         fig = px.pie(alloc.keys(), values=alloc.values(), names=alloc.keys())
+   562                                                         fig.update_traces(textposition='inside')
+   563                                                         fig.update_layout(width=500, height=500, uniformtext_minsize=12, uniformtext_mode='hide', title_text='Suggested Portfolio Distribution for min volatility (long)', title_x=0.5)
+   564                                                         global_dict[int(userId)]['plot_json_dist_min_vol_long'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   565                                                     except ValueError as e:
+   566                                                         global_dict[int(userId)]['finished'] = 'True'
+   567                                                         global_dict[int(userId)]['error'] = str(e)
+   568                                                         mc.set("global_dict", global_dict)
+   569                                                         return
+   570                                         
+   571                                                     #using risk models optimized for the Efficient frontier to reduce to min volitility, good for crypto currencies ('long and short')
+   572                                                     ef = EfficientFrontier(None, S, weight_bounds=(None, None))
+   573                                                     try:
+   574                                                         ef.min_volatility()
+   575                                                         weights = ef.clean_weights()
+   576                                                         nu = pd.Series(weights)
+   577                                                         fig = px.bar(nu, orientation='h')
+   578                                                         fig.update_layout(width=700, height=500, title_text = "Weights for minimum volatility (long/short)", title_x = 0.5, showlegend=False, yaxis_title=None, xaxis_title=None)
+   579                                                         global_dict[int(userId)]['plot_json_weight_min_vol_long_short'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   580                                                         av=ef.portfolio_performance()[1]
+   581                                                         global_dict[int(userId)]['av']=round(av*100, 2)
+   582                                         
+   583                                                     #if we want to buy the portfolio mentioned above
+   584                                                         try:
+   585                                                             da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
+   586                                                         except TypeError:
+   587                                                             delisted=prices.columns[df.isna().any()].tolist()
+   588                                                             delisted= ", ".join(delisted)
+   589                                                             global_dict[int(userId)]['finished'] = 'True'
+   590                                                             global_dict[int(userId)]['error'] = "Can't get latest prices for the following stock/s, please remove to contiue :" + delisted
+   591                                                             mc.set("global_dict", global_dict)
+   592                                                             return
+   593                                                         global_dict[int(userId)]['alloc_min_vol_long_short'], global_dict[int(userId)]['leftover_min_vol_long_short'] = da.lp_portfolio()
+   594                                                     except ValueError as e:
+   595                                                         global_dict[int(userId)]['finished'] = 'True'
+   596                                                         global_dict[int(userId)]['error'] = str(e)
+   597                                                         mc.set("global_dict", global_dict)
+   598                                                         return
+   599                                         
+   600                                                     #Maximise return for a given risk, with L2 regularisation
+   601                                                     mc.set(str(userId)+'_volatility', float(request.form.get("volatility")))
+   602                                                     mc.set(str(userId)+'_gamma', float(request.form.get("gamma")))
+   603                                                     mc.set(str(userId)+'_cvar', request.form.get("cvar"))
+   604                                                     mc.set(str(userId)+'_return', request.form.get("return"))
+   605                                                     try:
+   606                                                         ef = EfficientFrontier(mu, S)
+   607                                                         ef.add_objective(objective_functions.L2_reg, gamma=(float(request.form.get("gamma"))))  # gamme is the tuning parameter
+   608                                                         ef.efficient_risk(float(request.form.get("volatility"))/100)
+   609                                                         weights = ef.clean_weights()
+   610                                                         su = pd.DataFrame([weights])
+   611                                                         #finding zero weights
+   612                                                         num_small = len([k for k in weights if weights[k] <= 1e-4])
+   613                                                         global_dict[int(userId)]['num_small'] = str(f"{num_small}/{len(ef.tickers)} tickers have zero weight")
+   614                                                         fig = px.pie(su, values=weights.values(), names=su.columns)
+   615                                                         fig.update_traces(textposition='inside')
+   616                                                         fig.update_layout(width=500, height=500, uniformtext_minsize=12, uniformtext_mode='hide', title_text='Weights Distribution using Capital Asset Pricing Model', title_x=0.5)
+   617                                                         global_dict[int(userId)]['plot_json_L2_weights'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   618                                                         global_dict[int(userId)]['perf_L2'] = ef.portfolio_performance()
+   619                                                     except Exception as e:
+   620                                                         global_dict[int(userId)]['finished'] = 'True'
+   621                                                         global_dict[int(userId)]['error'] = str(e)
+   622                                                         mc.set("global_dict", global_dict)
+   623                                                         return
+   624                                         
+   625                                         
+   626                                                     #if we want to buy the portfolio mentioned above
+   627                                                     da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
+   628                                                     alloc, global_dict[int(userId)]['leftover_L2'] = da.lp_portfolio()
+   629                                                     global_dict[int(userId)]['alloc_L2']=alloc
+   630                                                     fig= px.pie(alloc.keys(), values=alloc.values(), names=alloc.keys())
+   631                                                     fig.update_traces(textposition='inside')
+   632                                                     fig.update_layout(width=500, height=500, uniformtext_minsize=12, font=dict(size=10), uniformtext_mode='hide', title_text='Suggested Portfolio Distribution using Capital Asset Pricing Model', title_x=0.5)
+   633                                                     global_dict[int(userId)]['plot_json_L2_port'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   634                                         
+   635                                                     #Efficient semi-variance optimization
+   636                                                     returns = pypfopt.expected_returns.returns_from_prices(prices)
+   637                                                     returns = returns.dropna()
+   638                                                     es = EfficientSemivariance(mu, returns)
+   639                                                     try:
+   640                                                         es.efficient_return(float(request.form.get("return"))/100)
+   641                                                     except ValueError as e:
+   642                                                         global_dict[int(userId)]['finished'] = 'True'
+   643                                                         global_dict[int(userId)]['error'] = str(e)
+   644                                                         mc.set("global_dict", global_dict)
+   645                                                         return
+   646                                                     global_dict[int(userId)]['perf_semi_v']=es.portfolio_performance()
+   647                                                     weights = es.clean_weights()
+   648                                         
+   649                                                     #if we want to buy the portfolio mentioned above
+   650                                                     da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
+   651                                                     alloc, global_dict[int(userId)]['leftover_semi_v'] = da.lp_portfolio()
+   652                                                     global_dict[int(userId)]['alloc_semi_v'] = alloc
+   653                                                     fig = px.pie(alloc.keys(), values=alloc.values(), names=alloc.keys())
+   654                                                     fig.update_traces(textposition='inside')
+   655                                                     fig.update_layout(width=500, height=500, uniformtext_minsize=12, font=dict(size=10), uniformtext_mode='hide', title_text='Suggested Portfolio Distribution using Capital Asset Pricing Model', title_x=0.5)
+   656                                                     global_dict[int(userId)]['plot_json_semi_v'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   657                                                     global_dict[int(userId)]['ret']=float(request.form.get("return"))
+   658                                                     global_dict[int(userId)]['gamma']=request.form.get("gamma")
+   659                                                     global_dict[int(userId)]['volatility']=request.form.get("volatility")
+   660                                         
+   661                                                     #construct the portfolio with the minimum CVaR
+   662                                                     returns =pypfopt.expected_returns.returns_from_prices(prices).dropna()
+   663                                                     global_dict[int(userId)]['cvar_value']=request.form.get("cvar")
+   664                                                     ef = EfficientFrontier(mu, S)
+   665                                                     ef.max_sharpe()
+   666                                                     weight_arr = ef.weights
+   667                                                     portfolio_rets = (returns * weight_arr).sum(axis=1)
+   668                                                     fig = px.histogram(portfolio_rets, nbins = 50)
+   669                                                     fig.update_layout(width=500, height=500, yaxis_title=None, xaxis_title=None, showlegend=False)
+   670                                                     global_dict[int(userId)]['plot_json_cvar'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   671                                                     global_dict[int(userId)]['var'] = portfolio_rets.quantile(0.05)
+   672                                                     global_dict[int(userId)]['cvar'] = portfolio_rets[portfolio_rets <= global_dict[int(userId)]['var']].mean()
+   673                                                     ec = EfficientCVaR(mu, returns)
+   674                                                     try:
+   675                                                         ec.efficient_risk(target_cvar=float(request.form.get("cvar"))/100)
+   676                                                     except:
+   677                                                         global_dict[int(userId)]['finished'] = 'True'
+   678                                                         global_dict[int(userId)]['error'] = f"Please enter CVaR higher than {round(global_dict[int(userId)]['cvar']*100, 1)}%"
+   679                                                         mc.set("global_dict", global_dict)
+   680                                                         return
+   681                                                     weights = ec.clean_weights()
+   682                                                     da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
+   683                                                     global_dict[int(userId)]['alloc_cvar'], global_dict[int(userId)]['leftover_cvar'] = da.lp_portfolio()
+   684                                                     global_dict[int(userId)]['target_CVaR_exp_rtn'], global_dict[int(userId)]['target_CVaR_cond_val_risk'] = ec.portfolio_performance()
+   685                                                     global_dict[int(userId)]['finished'] = 'True'
+   686                                                     mc.set("global_dict", global_dict)
+   687                                                     return
+   688                                                 t1 = Thread(target=operation, args=[global_dict, session])
+   689                                                 t1.start()
+   690                                         
+   691                                                 @copy_current_request_context
+   692                                                 def enter_sql_data(nasdaq_exchange_info, tickers):
+   693                                                     for ticker in tickers:
+   694                                                         ticker=ticker.upper()
+   695                                                         if any(sublist[1]==ticker in sublist for sublist in nasdaq_exchange_info) is False:
+   696                                                             try:
+   697                                                                 ticker_ln = yf.Ticker(ticker).stats()["price"].get('longName')
+   698                                                             except:
+   699                                                                 continue
+   700                                                             if not ticker_ln:
+   701                                                                 ticker_ln = ticker
+   702                                                             ticker_list=[ticker_ln, ticker]
+   703                                                             new_stock=Stocks(ticker, ticker_ln)
+   704                                                             db.session.add(new_stock)
+   705                                                             db.session.commit()
+   706                                                             nasdaq_exchange_info.extend([ticker_list])
+   707                                                             return
+   708                                                 #global nasdaq_exchange_info
+   709                                                 t2 = Thread(target=enter_sql_data, args=[nasdaq_exchange_info, tickers])
+   710                                                 t2.start()
+   711                                                 t1.join()
+   712                                                 t2.join()
+   713                                                 #thread_pool.shutdown()
+   714                                                 return render_template("loading.html")
+   715                                             else:
+   716    185.8 MiB      0.0 MiB           1           cached_symbols = mc.get(str(userId) + "_symbols") if mc.get(str(userId) + "_symbols") else ''
+   717    185.8 MiB      0.0 MiB           1           start_cached = mc.get(str(userId)+'start_date') if mc.get(str(userId)+'start_date') else 0
+   718    185.8 MiB      0.0 MiB           1           funds_cached = mc.get(str(userId) + '_funds') if mc.get(str(userId) + '_funds') else 0
+   719    185.8 MiB      0.0 MiB           1           vol_cached = mc.get(str(userId)+'_volatility') if mc.get(str(userId)+'_volatility') else 0
+   720    185.8 MiB      0.0 MiB           1           gamma_cached = mc.get(str(userId)+'_gamma') if mc.get(str(userId)+'_gamma') else 0
+   721    185.8 MiB      0.0 MiB           1           cvar_cached = mc.get(str(userId)+'_cvar') if mc.get(str(userId)+'_cvar') else 0
+   722    185.8 MiB      0.0 MiB           1           return_cached = mc.get(str(userId)+'_return') if mc.get(str(userId)+'_return') else 0
+   723                                         
+   724    185.8 MiB      0.0 MiB           1           availableCash=db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
+   725    190.1 MiB      4.4 MiB           1           return render_template("build.html", availableCash=round(availableCash, 4), GBP=GBPtoUSD(), nasdaq_exchange_info=nasdaq_exchange_info, return_cached = return_cached, cvar_cached = cvar_cached, gamma_cached = gamma_cached, vol_cached = vol_cached, funds_cached = funds_cached, start_cached = start_cached, cached_symbols=cached_symbols, top_50_crypto=top_50_crypto, top_world_stocks=top_world_stocks, top_US_stocks=top_US_stocks, top_div=top_div, win_loss_signal = win_loss_signal, win_loss_trend=win_loss_trend)
+
+
+Filename: /home/originn/layoutest/application/routes.py
+
+Line #    Mem usage    Increment  Occurrences   Line Contents
+=============================================================
+   400    189.0 MiB    189.0 MiB           1   @app.route("/build",methods=["GET", "POST"])
+   401                                         @login_required
+   402                                         @memory_profiler.profile(stream=fp)
+   403                                         def build():
+   404                                             #thread_pool = ThreadPoolExecutor(max_workers=4)
+   405    189.0 MiB      0.0 MiB           1       global_dict = {}
+   406    189.0 MiB      0.0 MiB           1       userId = session['user_id']
+   407    189.0 MiB      0.0 MiB           1       global_dict[int(userId)] = {}
+   408    189.0 MiB      0.0 MiB           1       if request.method == "POST":
+   409                                                 #global global_dict
+   410    189.0 MiB      0.0 MiB           1           global_dict[int(userId)]['finished'] = 'False'
+   411    189.0 MiB      0.0 MiB           1           tickers = request.form.get("symbols")
+   412    189.0 MiB      0.0 MiB           1           tickers = list(set(tickers.split()))
+   413    189.0 MiB      0.0 MiB           1           @copy_current_request_context
+   414    189.0 MiB      0.0 MiB           1           def operation(global_dict, session):
+   415                                                     symbols = request.form.get("symbols")
+   416                                                     mc.set(str(userId) + "_symbols", symbols)
+   417                                                     symbols = list(set(symbols.split()))
+   418                                                     if contains_multiple_words(symbols) == False:
+   419                                                         global_dict[int(userId)]['finished'] = 'True'
+   420                                                         global_dict[int(userId)]['error'] = "The app purpose is to optimize a portfolio given a list of stocks. Please enter a list of stocks seperated by a new row."
+   421                                                         mc.set("global_dict", global_dict)
+   422                                                         return
+   423                                                     if float(request.form.get("funds")) <= 0 or float(request.form.get("funds")) == " ":
+   424                                                         global_dict[int(userId)]['finished'] = 'True'
+   425                                                         global_dict[int(userId)]['error'] = "Amount need to be a positive number"
+   426                                                         mc.set("global_dict", global_dict)
+   427                                                         return
+   428                                                     Build(session["user_id"], request.form.get("symbols").upper(), request.form.get("start"), request.form.get("end"), request.form.get("funds"), request.form.get("short"), request.form.get("volatility"), request.form.get("gamma"), request.form.get("return"))
+   429                                                     db.session.commit()
+   430                                                     try:
+   431                                                         mc.set(str(userId)+'start_date', request.form.get("start"))
+   432                                                         df = yf.download(symbols, start=request.form.get("start"), end=request.form.get("end"), auto_adjust = False, prepost = False, threads = True, proxy = None)["Adj Close"].dropna(axis=1, how='all')
+   433                                                         failed=(list(shared._ERRORS.keys()))
+   434                                                         df = df.replace(0, np.nan)
+   435                                                         try:
+   436                                                             global_dict[int(userId)]['listofna']=df.columns[df.isna().iloc[-2]].tolist()+failed
+   437                                                         except IndexError:
+   438                                                             global_dict[int(userId)]['finished'] = 'True'
+   439                                                             global_dict[int(userId)]['error'] = "Please enter valid stocks from Yahoo Finance."
+   440                                                             mc.set("global_dict", global_dict)
+   441                                                             return
+   442                                                         df = df.loc[:,df.iloc[-2,:].notna()]
+   443                                                     except ValueError:
+   444                                                         global_dict[int(userId)]['finished'] = 'True'
+   445                                                         global_dict[int(userId)]['error'] = "Please enter a valid symbols (taken from Yahoo Finance)"
+   446                                                         mc.set("global_dict", global_dict)
+   447                                                         return
+   448                                         
+   449                                                     prices = df.copy()
+   450                                                     fig = px.line(prices, x=prices.index, y=prices.columns)
+   451                                                     fig = fig.update_xaxes(rangeslider_visible=True)
+   452                                                     fig.update_layout(width=1350, height=900, title_text = 'Price Graph', title_x = 0.5)
+   453                                                     global_dict[int(userId)]['plot_json_graph'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   454                                         
+   455                                                     exp_cov = risk_models.exp_cov(prices, frequency=252)
+   456                                         
+   457                                                     #plotting the covariance matrix
+   458                                                     heat = go.Heatmap(
+   459                                                         z = risk_models.cov_to_corr(exp_cov),
+   460                                                         x = exp_cov.columns.values,
+   461                                                         y = exp_cov.columns.values,
+   462                                                         zmin = 0, # Sets the lower bound of the color domain
+   463                                                         zmax = 1,
+   464                                                         xgap = 1, # Sets the horizontal gap (in pixels) between bricks
+   465                                                         ygap = 1,
+   466                                                         colorscale = 'RdBu'
+   467                                                     )
+   468                                         
+   469                                                     title = 'Exponential covariance matrix'
+   470                                         
+   471                                                     layout = go.Layout(
+   472                                                         title_text=title,
+   473                                                         title_x=0.5,
+   474                                                         width=500,
+   475                                                         height=500,
+   476                                                         xaxis_showgrid=False,
+   477                                                         yaxis_showgrid=False,
+   478                                                         yaxis_autorange='reversed'
+   479                                                     )
+   480                                         
+   481                                                     fig=go.Figure(data=[heat], layout=layout)
+   482                                                     global_dict[int(userId)]['plot_json_exp_cov'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   483                                         
+   484                                         
+   485                                         
+   486                                                     S = risk_models.CovarianceShrinkage(prices).ledoit_wolf()
+   487                                         
+   488                                                     heat = go.Heatmap(
+   489                                                         z = risk_models.cov_to_corr(S),
+   490                                                         x = S.columns.values,
+   491                                                         y = S.columns.values,
+   492                                                         zmin = 0, # Sets the lower bound of the color domain
+   493                                                         zmax = 1,
+   494                                                         xgap = 1, # Sets the horizontal gap (in pixels) between bricks
+   495                                                         ygap = 1,
+   496                                                         colorscale = 'RdBu'
+   497                                                     )
+   498                                         
+   499                                                     title = 'Ledoit-Wolf shrinkage'
+   500                                         
+   501                                                     layout = go.Layout(
+   502                                                         title_text=title,
+   503                                                         title_x=0.5,
+   504                                                         width=500,
+   505                                                         height=500,
+   506                                                         xaxis_showgrid=False,
+   507                                                         yaxis_showgrid=False,
+   508                                                         yaxis_autorange='reversed'
+   509                                                     )
+   510                                         
+   511                                                     fig=go.Figure(data=[heat], layout=layout)
+   512                                                     global_dict[int(userId)]['plot_json_Ledoit_Wolf'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   513                                         
+   514                                         
+   515                                                     #Section 2 -Return estimation
+   516                                                     #it is often a bad idea to provide returns using a simple estimate like the mean of past returns. Research suggests that better off not providing expected returns – you can then just find the min_volatility() portfolio or use HRP.
+   517                                                     mu = pypfopt.expected_returns.capm_return(prices)
+   518                                         
+   519                                                     #using risk models optimized for the Efficient frontier to reduce to min volitility, good for crypto currencies ('long only')
+   520                                                     ef = EfficientFrontier(None, S)
+   521                                                     try:
+   522                                                         ef.min_volatility()
+   523                                                         weights = ef.clean_weights()
+   524                                                         nu = pd.Series(weights)
+   525                                                         fig = px.bar(nu, orientation='h')
+   526                                                         fig.update_layout(width=700, height=500, title_text = "Weights for minimum volatility (long only)", title_x = 0.5, showlegend=False, yaxis_title=None, xaxis_title=None)
+   527                                                         global_dict[int(userId)]['plot_json_weights_min_vol_long'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   528                                                         av=ef.portfolio_performance()[1]
+   529                                                         global_dict[int(userId)]['av_min_vol_long']=round(av*100, 2)
+   530                                         
+   531                                         
+   532                                                     #if we want to buy the portfolio mentioned above
+   533                                                         for col in prices.columns:
+   534                                                             if col.endswith(".L"):
+   535                                                                 prices.loc[:,col] = prices.loc[:,col]*GBPtoUSD()
+   536                                                         try:
+   537                                                             latest_prices = prices.iloc[-1]
+   538                                                         except IndexError:
+   539                                                             global_dict[int(userId)]['finished'] = 'True'
+   540                                                             global_dict[int(userId)]['error'] = "There is an issue with Yahoo API please try again later"
+   541                                                             mc.set("global_dict", global_dict)
+   542                                                             return
+   543                                                         # prices as of the day you are allocating
+   544                                                         if float(request.form.get("funds")) < float(latest_prices.min()):
+   545                                                             global_dict[int(userId)]['finished'] = 'True'
+   546                                                             global_dict[int(userId)]['error'] = "Amount is not high enough to cover the lowest priced stock"
+   547                                                             mc.set("global_dict", global_dict)
+   548                                                             return
+   549                                                         try:
+   550                                                             da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
+   551                                                             mc.set(str(userId) + '_funds', float(request.form.get("funds")))
+   552                                                         except TypeError:
+   553                                                             delisted=prices.columns[df.isna().any()].tolist()
+   554                                                             delisted= ", ".join(delisted)
+   555                                                             global_dict[int(userId)]['finished'] = 'True'
+   556                                                             global_dict[int(userId)]['error'] = "Can't get latest prices for the following stock/s, please remove to contiue :" + delisted
+   557                                                             mc.set("global_dict", global_dict)
+   558                                                             return
+   559                                                         alloc, global_dict[int(userId)]['leftover_min_vol_long'] = da.lp_portfolio()
+   560                                                         global_dict[int(userId)]['alloc_min_vol_long']=alloc
+   561                                                         fig = px.pie(alloc.keys(), values=alloc.values(), names=alloc.keys())
+   562                                                         fig.update_traces(textposition='inside')
+   563                                                         fig.update_layout(width=500, height=500, uniformtext_minsize=12, uniformtext_mode='hide', title_text='Suggested Portfolio Distribution for min volatility (long)', title_x=0.5)
+   564                                                         global_dict[int(userId)]['plot_json_dist_min_vol_long'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   565                                                     except ValueError as e:
+   566                                                         global_dict[int(userId)]['finished'] = 'True'
+   567                                                         global_dict[int(userId)]['error'] = str(e)
+   568                                                         mc.set("global_dict", global_dict)
+   569                                                         return
+   570                                         
+   571                                                     #using risk models optimized for the Efficient frontier to reduce to min volitility, good for crypto currencies ('long and short')
+   572                                                     ef = EfficientFrontier(None, S, weight_bounds=(None, None))
+   573                                                     try:
+   574                                                         ef.min_volatility()
+   575                                                         weights = ef.clean_weights()
+   576                                                         nu = pd.Series(weights)
+   577                                                         fig = px.bar(nu, orientation='h')
+   578                                                         fig.update_layout(width=700, height=500, title_text = "Weights for minimum volatility (long/short)", title_x = 0.5, showlegend=False, yaxis_title=None, xaxis_title=None)
+   579                                                         global_dict[int(userId)]['plot_json_weight_min_vol_long_short'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   580                                                         av=ef.portfolio_performance()[1]
+   581                                                         global_dict[int(userId)]['av']=round(av*100, 2)
+   582                                         
+   583                                                     #if we want to buy the portfolio mentioned above
+   584                                                         try:
+   585                                                             da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
+   586                                                         except TypeError:
+   587                                                             delisted=prices.columns[df.isna().any()].tolist()
+   588                                                             delisted= ", ".join(delisted)
+   589                                                             global_dict[int(userId)]['finished'] = 'True'
+   590                                                             global_dict[int(userId)]['error'] = "Can't get latest prices for the following stock/s, please remove to contiue :" + delisted
+   591                                                             mc.set("global_dict", global_dict)
+   592                                                             return
+   593                                                         global_dict[int(userId)]['alloc_min_vol_long_short'], global_dict[int(userId)]['leftover_min_vol_long_short'] = da.lp_portfolio()
+   594                                                     except ValueError as e:
+   595                                                         global_dict[int(userId)]['finished'] = 'True'
+   596                                                         global_dict[int(userId)]['error'] = str(e)
+   597                                                         mc.set("global_dict", global_dict)
+   598                                                         return
+   599                                         
+   600                                                     #Maximise return for a given risk, with L2 regularisation
+   601                                                     mc.set(str(userId)+'_volatility', float(request.form.get("volatility")))
+   602                                                     mc.set(str(userId)+'_gamma', float(request.form.get("gamma")))
+   603                                                     mc.set(str(userId)+'_cvar', request.form.get("cvar"))
+   604                                                     mc.set(str(userId)+'_return', request.form.get("return"))
+   605                                                     try:
+   606                                                         ef = EfficientFrontier(mu, S)
+   607                                                         ef.add_objective(objective_functions.L2_reg, gamma=(float(request.form.get("gamma"))))  # gamme is the tuning parameter
+   608                                                         ef.efficient_risk(float(request.form.get("volatility"))/100)
+   609                                                         weights = ef.clean_weights()
+   610                                                         su = pd.DataFrame([weights])
+   611                                                         #finding zero weights
+   612                                                         num_small = len([k for k in weights if weights[k] <= 1e-4])
+   613                                                         global_dict[int(userId)]['num_small'] = str(f"{num_small}/{len(ef.tickers)} tickers have zero weight")
+   614                                                         fig = px.pie(su, values=weights.values(), names=su.columns)
+   615                                                         fig.update_traces(textposition='inside')
+   616                                                         fig.update_layout(width=500, height=500, uniformtext_minsize=12, uniformtext_mode='hide', title_text='Weights Distribution using Capital Asset Pricing Model', title_x=0.5)
+   617                                                         global_dict[int(userId)]['plot_json_L2_weights'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   618                                                         global_dict[int(userId)]['perf_L2'] = ef.portfolio_performance()
+   619                                                     except Exception as e:
+   620                                                         global_dict[int(userId)]['finished'] = 'True'
+   621                                                         global_dict[int(userId)]['error'] = str(e)
+   622                                                         mc.set("global_dict", global_dict)
+   623                                                         return
+   624                                         
+   625                                         
+   626                                                     #if we want to buy the portfolio mentioned above
+   627                                                     da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
+   628                                                     alloc, global_dict[int(userId)]['leftover_L2'] = da.lp_portfolio()
+   629                                                     global_dict[int(userId)]['alloc_L2']=alloc
+   630                                                     fig= px.pie(alloc.keys(), values=alloc.values(), names=alloc.keys())
+   631                                                     fig.update_traces(textposition='inside')
+   632                                                     fig.update_layout(width=500, height=500, uniformtext_minsize=12, font=dict(size=10), uniformtext_mode='hide', title_text='Suggested Portfolio Distribution using Capital Asset Pricing Model', title_x=0.5)
+   633                                                     global_dict[int(userId)]['plot_json_L2_port'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   634                                         
+   635                                                     #Efficient semi-variance optimization
+   636                                                     returns = pypfopt.expected_returns.returns_from_prices(prices)
+   637                                                     returns = returns.dropna()
+   638                                                     es = EfficientSemivariance(mu, returns)
+   639                                                     try:
+   640                                                         es.efficient_return(float(request.form.get("return"))/100)
+   641                                                     except ValueError as e:
+   642                                                         global_dict[int(userId)]['finished'] = 'True'
+   643                                                         global_dict[int(userId)]['error'] = str(e)
+   644                                                         mc.set("global_dict", global_dict)
+   645                                                         return
+   646                                                     global_dict[int(userId)]['perf_semi_v']=es.portfolio_performance()
+   647                                                     weights = es.clean_weights()
+   648                                         
+   649                                                     #if we want to buy the portfolio mentioned above
+   650                                                     da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
+   651                                                     alloc, global_dict[int(userId)]['leftover_semi_v'] = da.lp_portfolio()
+   652                                                     global_dict[int(userId)]['alloc_semi_v'] = alloc
+   653                                                     fig = px.pie(alloc.keys(), values=alloc.values(), names=alloc.keys())
+   654                                                     fig.update_traces(textposition='inside')
+   655                                                     fig.update_layout(width=500, height=500, uniformtext_minsize=12, font=dict(size=10), uniformtext_mode='hide', title_text='Suggested Portfolio Distribution using Capital Asset Pricing Model', title_x=0.5)
+   656                                                     global_dict[int(userId)]['plot_json_semi_v'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   657                                                     global_dict[int(userId)]['ret']=float(request.form.get("return"))
+   658                                                     global_dict[int(userId)]['gamma']=request.form.get("gamma")
+   659                                                     global_dict[int(userId)]['volatility']=request.form.get("volatility")
+   660                                         
+   661                                                     #construct the portfolio with the minimum CVaR
+   662                                                     returns =pypfopt.expected_returns.returns_from_prices(prices).dropna()
+   663                                                     global_dict[int(userId)]['cvar_value']=request.form.get("cvar")
+   664                                                     ef = EfficientFrontier(mu, S)
+   665                                                     ef.max_sharpe()
+   666                                                     weight_arr = ef.weights
+   667                                                     portfolio_rets = (returns * weight_arr).sum(axis=1)
+   668                                                     fig = px.histogram(portfolio_rets, nbins = 50)
+   669                                                     fig.update_layout(width=500, height=500, yaxis_title=None, xaxis_title=None, showlegend=False)
+   670                                                     global_dict[int(userId)]['plot_json_cvar'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   671                                                     global_dict[int(userId)]['var'] = portfolio_rets.quantile(0.05)
+   672                                                     global_dict[int(userId)]['cvar'] = portfolio_rets[portfolio_rets <= global_dict[int(userId)]['var']].mean()
+   673                                                     ec = EfficientCVaR(mu, returns)
+   674                                                     try:
+   675                                                         ec.efficient_risk(target_cvar=float(request.form.get("cvar"))/100)
+   676                                                     except:
+   677                                                         global_dict[int(userId)]['finished'] = 'True'
+   678                                                         global_dict[int(userId)]['error'] = f"Please enter CVaR higher than {round(global_dict[int(userId)]['cvar']*100, 1)}%"
+   679                                                         mc.set("global_dict", global_dict)
+   680                                                         return
+   681                                                     weights = ec.clean_weights()
+   682                                                     da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
+   683                                                     global_dict[int(userId)]['alloc_cvar'], global_dict[int(userId)]['leftover_cvar'] = da.lp_portfolio()
+   684                                                     global_dict[int(userId)]['target_CVaR_exp_rtn'], global_dict[int(userId)]['target_CVaR_cond_val_risk'] = ec.portfolio_performance()
+   685                                                     global_dict[int(userId)]['finished'] = 'True'
+   686                                                     mc.set("global_dict", global_dict)
+   687                                                     return
+   688    189.0 MiB      0.0 MiB           1           t1 = Thread(target=operation, args=[global_dict, session])
+   689    189.0 MiB      0.0 MiB           1           t1.start()
+   690                                         
+   691    189.0 MiB      0.0 MiB           1           @copy_current_request_context
+   692    189.0 MiB      0.0 MiB           1           def enter_sql_data(nasdaq_exchange_info, tickers):
+   693                                                     for ticker in tickers:
+   694                                                         ticker=ticker.upper()
+   695                                                         if any(sublist[1]==ticker in sublist for sublist in nasdaq_exchange_info) is False:
+   696                                                             try:
+   697                                                                 ticker_ln = yf.Ticker(ticker).stats()["price"].get('longName')
+   698                                                             except:
+   699                                                                 continue
+   700                                                             if not ticker_ln:
+   701                                                                 ticker_ln = ticker
+   702                                                             ticker_list=[ticker_ln, ticker]
+   703                                                             new_stock=Stocks(ticker, ticker_ln)
+   704                                                             db.session.add(new_stock)
+   705                                                             db.session.commit()
+   706                                                             nasdaq_exchange_info.extend([ticker_list])
+   707                                                             return
+   708                                                 #global nasdaq_exchange_info
+   709    189.0 MiB      0.0 MiB           1           t2 = Thread(target=enter_sql_data, args=[nasdaq_exchange_info, tickers])
+   710    189.0 MiB      0.0 MiB           1           t2.start()
+   711    256.0 MiB     67.0 MiB           1           t1.join()
+   712    256.0 MiB     -0.1 MiB           1           t2.join()
+   713                                                 #thread_pool.shutdown()
+   714    256.0 MiB      0.0 MiB           1           return render_template("loading.html")
+   715                                             else:
+   716                                                 cached_symbols = mc.get(str(userId) + "_symbols") if mc.get(str(userId) + "_symbols") else ''
+   717                                                 start_cached = mc.get(str(userId)+'start_date') if mc.get(str(userId)+'start_date') else 0
+   718                                                 funds_cached = mc.get(str(userId) + '_funds') if mc.get(str(userId) + '_funds') else 0
+   719                                                 vol_cached = mc.get(str(userId)+'_volatility') if mc.get(str(userId)+'_volatility') else 0
+   720                                                 gamma_cached = mc.get(str(userId)+'_gamma') if mc.get(str(userId)+'_gamma') else 0
+   721                                                 cvar_cached = mc.get(str(userId)+'_cvar') if mc.get(str(userId)+'_cvar') else 0
+   722                                                 return_cached = mc.get(str(userId)+'_return') if mc.get(str(userId)+'_return') else 0
+   723                                         
+   724                                                 availableCash=db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
+   725                                                 return render_template("build.html", availableCash=round(availableCash, 4), GBP=GBPtoUSD(), nasdaq_exchange_info=nasdaq_exchange_info, return_cached = return_cached, cvar_cached = cvar_cached, gamma_cached = gamma_cached, vol_cached = vol_cached, funds_cached = funds_cached, start_cached = start_cached, cached_symbols=cached_symbols, top_50_crypto=top_50_crypto, top_world_stocks=top_world_stocks, top_US_stocks=top_US_stocks, top_div=top_div, win_loss_signal = win_loss_signal, win_loss_trend=win_loss_trend)
+
+
+Filename: /home/originn/layoutest/application/routes.py
+
+Line #    Mem usage    Increment  Occurrences   Line Contents
+=============================================================
+   400    261.4 MiB    261.4 MiB           1   @app.route("/build",methods=["GET", "POST"])
+   401                                         @login_required
+   402                                         @memory_profiler.profile(stream=fp)
+   403                                         def build():
+   404                                             #thread_pool = ThreadPoolExecutor(max_workers=4)
+   405    261.4 MiB      0.0 MiB           1       global_dict = {}
+   406    261.4 MiB      0.0 MiB           1       userId = session['user_id']
+   407    261.4 MiB      0.0 MiB           1       global_dict[int(userId)] = {}
+   408    261.4 MiB      0.0 MiB           1       if request.method == "POST":
+   409                                                 #global global_dict
+   410                                                 global_dict[int(userId)]['finished'] = 'False'
+   411                                                 tickers = request.form.get("symbols")
+   412                                                 tickers = list(set(tickers.split()))
+   413                                                 @copy_current_request_context
+   414                                                 def operation(global_dict, session):
+   415                                                     symbols = request.form.get("symbols")
+   416                                                     mc.set(str(userId) + "_symbols", symbols)
+   417                                                     symbols = list(set(symbols.split()))
+   418                                                     if contains_multiple_words(symbols) == False:
+   419                                                         global_dict[int(userId)]['finished'] = 'True'
+   420                                                         global_dict[int(userId)]['error'] = "The app purpose is to optimize a portfolio given a list of stocks. Please enter a list of stocks seperated by a new row."
+   421                                                         mc.set("global_dict", global_dict)
+   422                                                         return
+   423                                                     if float(request.form.get("funds")) <= 0 or float(request.form.get("funds")) == " ":
+   424                                                         global_dict[int(userId)]['finished'] = 'True'
+   425                                                         global_dict[int(userId)]['error'] = "Amount need to be a positive number"
+   426                                                         mc.set("global_dict", global_dict)
+   427                                                         return
+   428                                                     Build(session["user_id"], request.form.get("symbols").upper(), request.form.get("start"), request.form.get("end"), request.form.get("funds"), request.form.get("short"), request.form.get("volatility"), request.form.get("gamma"), request.form.get("return"))
+   429                                                     db.session.commit()
+   430                                                     try:
+   431                                                         mc.set(str(userId)+'start_date', request.form.get("start"))
+   432                                                         df = yf.download(symbols, start=request.form.get("start"), end=request.form.get("end"), auto_adjust = False, prepost = False, threads = True, proxy = None)["Adj Close"].dropna(axis=1, how='all')
+   433                                                         failed=(list(shared._ERRORS.keys()))
+   434                                                         df = df.replace(0, np.nan)
+   435                                                         try:
+   436                                                             global_dict[int(userId)]['listofna']=df.columns[df.isna().iloc[-2]].tolist()+failed
+   437                                                         except IndexError:
+   438                                                             global_dict[int(userId)]['finished'] = 'True'
+   439                                                             global_dict[int(userId)]['error'] = "Please enter valid stocks from Yahoo Finance."
+   440                                                             mc.set("global_dict", global_dict)
+   441                                                             return
+   442                                                         df = df.loc[:,df.iloc[-2,:].notna()]
+   443                                                     except ValueError:
+   444                                                         global_dict[int(userId)]['finished'] = 'True'
+   445                                                         global_dict[int(userId)]['error'] = "Please enter a valid symbols (taken from Yahoo Finance)"
+   446                                                         mc.set("global_dict", global_dict)
+   447                                                         return
+   448                                         
+   449                                                     prices = df.copy()
+   450                                                     fig = px.line(prices, x=prices.index, y=prices.columns)
+   451                                                     fig = fig.update_xaxes(rangeslider_visible=True)
+   452                                                     fig.update_layout(width=1350, height=900, title_text = 'Price Graph', title_x = 0.5)
+   453                                                     global_dict[int(userId)]['plot_json_graph'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   454                                         
+   455                                                     exp_cov = risk_models.exp_cov(prices, frequency=252)
+   456                                         
+   457                                                     #plotting the covariance matrix
+   458                                                     heat = go.Heatmap(
+   459                                                         z = risk_models.cov_to_corr(exp_cov),
+   460                                                         x = exp_cov.columns.values,
+   461                                                         y = exp_cov.columns.values,
+   462                                                         zmin = 0, # Sets the lower bound of the color domain
+   463                                                         zmax = 1,
+   464                                                         xgap = 1, # Sets the horizontal gap (in pixels) between bricks
+   465                                                         ygap = 1,
+   466                                                         colorscale = 'RdBu'
+   467                                                     )
+   468                                         
+   469                                                     title = 'Exponential covariance matrix'
+   470                                         
+   471                                                     layout = go.Layout(
+   472                                                         title_text=title,
+   473                                                         title_x=0.5,
+   474                                                         width=500,
+   475                                                         height=500,
+   476                                                         xaxis_showgrid=False,
+   477                                                         yaxis_showgrid=False,
+   478                                                         yaxis_autorange='reversed'
+   479                                                     )
+   480                                         
+   481                                                     fig=go.Figure(data=[heat], layout=layout)
+   482                                                     global_dict[int(userId)]['plot_json_exp_cov'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   483                                         
+   484                                         
+   485                                         
+   486                                                     S = risk_models.CovarianceShrinkage(prices).ledoit_wolf()
+   487                                         
+   488                                                     heat = go.Heatmap(
+   489                                                         z = risk_models.cov_to_corr(S),
+   490                                                         x = S.columns.values,
+   491                                                         y = S.columns.values,
+   492                                                         zmin = 0, # Sets the lower bound of the color domain
+   493                                                         zmax = 1,
+   494                                                         xgap = 1, # Sets the horizontal gap (in pixels) between bricks
+   495                                                         ygap = 1,
+   496                                                         colorscale = 'RdBu'
+   497                                                     )
+   498                                         
+   499                                                     title = 'Ledoit-Wolf shrinkage'
+   500                                         
+   501                                                     layout = go.Layout(
+   502                                                         title_text=title,
+   503                                                         title_x=0.5,
+   504                                                         width=500,
+   505                                                         height=500,
+   506                                                         xaxis_showgrid=False,
+   507                                                         yaxis_showgrid=False,
+   508                                                         yaxis_autorange='reversed'
+   509                                                     )
+   510                                         
+   511                                                     fig=go.Figure(data=[heat], layout=layout)
+   512                                                     global_dict[int(userId)]['plot_json_Ledoit_Wolf'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   513                                         
+   514                                         
+   515                                                     #Section 2 -Return estimation
+   516                                                     #it is often a bad idea to provide returns using a simple estimate like the mean of past returns. Research suggests that better off not providing expected returns – you can then just find the min_volatility() portfolio or use HRP.
+   517                                                     mu = pypfopt.expected_returns.capm_return(prices)
+   518                                         
+   519                                                     #using risk models optimized for the Efficient frontier to reduce to min volitility, good for crypto currencies ('long only')
+   520                                                     ef = EfficientFrontier(None, S)
+   521                                                     try:
+   522                                                         ef.min_volatility()
+   523                                                         weights = ef.clean_weights()
+   524                                                         nu = pd.Series(weights)
+   525                                                         fig = px.bar(nu, orientation='h')
+   526                                                         fig.update_layout(width=700, height=500, title_text = "Weights for minimum volatility (long only)", title_x = 0.5, showlegend=False, yaxis_title=None, xaxis_title=None)
+   527                                                         global_dict[int(userId)]['plot_json_weights_min_vol_long'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   528                                                         av=ef.portfolio_performance()[1]
+   529                                                         global_dict[int(userId)]['av_min_vol_long']=round(av*100, 2)
+   530                                         
+   531                                         
+   532                                                     #if we want to buy the portfolio mentioned above
+   533                                                         for col in prices.columns:
+   534                                                             if col.endswith(".L"):
+   535                                                                 prices.loc[:,col] = prices.loc[:,col]*GBPtoUSD()
+   536                                                         try:
+   537                                                             latest_prices = prices.iloc[-1]
+   538                                                         except IndexError:
+   539                                                             global_dict[int(userId)]['finished'] = 'True'
+   540                                                             global_dict[int(userId)]['error'] = "There is an issue with Yahoo API please try again later"
+   541                                                             mc.set("global_dict", global_dict)
+   542                                                             return
+   543                                                         # prices as of the day you are allocating
+   544                                                         if float(request.form.get("funds")) < float(latest_prices.min()):
+   545                                                             global_dict[int(userId)]['finished'] = 'True'
+   546                                                             global_dict[int(userId)]['error'] = "Amount is not high enough to cover the lowest priced stock"
+   547                                                             mc.set("global_dict", global_dict)
+   548                                                             return
+   549                                                         try:
+   550                                                             da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
+   551                                                             mc.set(str(userId) + '_funds', float(request.form.get("funds")))
+   552                                                         except TypeError:
+   553                                                             delisted=prices.columns[df.isna().any()].tolist()
+   554                                                             delisted= ", ".join(delisted)
+   555                                                             global_dict[int(userId)]['finished'] = 'True'
+   556                                                             global_dict[int(userId)]['error'] = "Can't get latest prices for the following stock/s, please remove to contiue :" + delisted
+   557                                                             mc.set("global_dict", global_dict)
+   558                                                             return
+   559                                                         alloc, global_dict[int(userId)]['leftover_min_vol_long'] = da.lp_portfolio()
+   560                                                         global_dict[int(userId)]['alloc_min_vol_long']=alloc
+   561                                                         fig = px.pie(alloc.keys(), values=alloc.values(), names=alloc.keys())
+   562                                                         fig.update_traces(textposition='inside')
+   563                                                         fig.update_layout(width=500, height=500, uniformtext_minsize=12, uniformtext_mode='hide', title_text='Suggested Portfolio Distribution for min volatility (long)', title_x=0.5)
+   564                                                         global_dict[int(userId)]['plot_json_dist_min_vol_long'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   565                                                     except ValueError as e:
+   566                                                         global_dict[int(userId)]['finished'] = 'True'
+   567                                                         global_dict[int(userId)]['error'] = str(e)
+   568                                                         mc.set("global_dict", global_dict)
+   569                                                         return
+   570                                         
+   571                                                     #using risk models optimized for the Efficient frontier to reduce to min volitility, good for crypto currencies ('long and short')
+   572                                                     ef = EfficientFrontier(None, S, weight_bounds=(None, None))
+   573                                                     try:
+   574                                                         ef.min_volatility()
+   575                                                         weights = ef.clean_weights()
+   576                                                         nu = pd.Series(weights)
+   577                                                         fig = px.bar(nu, orientation='h')
+   578                                                         fig.update_layout(width=700, height=500, title_text = "Weights for minimum volatility (long/short)", title_x = 0.5, showlegend=False, yaxis_title=None, xaxis_title=None)
+   579                                                         global_dict[int(userId)]['plot_json_weight_min_vol_long_short'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   580                                                         av=ef.portfolio_performance()[1]
+   581                                                         global_dict[int(userId)]['av']=round(av*100, 2)
+   582                                         
+   583                                                     #if we want to buy the portfolio mentioned above
+   584                                                         try:
+   585                                                             da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
+   586                                                         except TypeError:
+   587                                                             delisted=prices.columns[df.isna().any()].tolist()
+   588                                                             delisted= ", ".join(delisted)
+   589                                                             global_dict[int(userId)]['finished'] = 'True'
+   590                                                             global_dict[int(userId)]['error'] = "Can't get latest prices for the following stock/s, please remove to contiue :" + delisted
+   591                                                             mc.set("global_dict", global_dict)
+   592                                                             return
+   593                                                         global_dict[int(userId)]['alloc_min_vol_long_short'], global_dict[int(userId)]['leftover_min_vol_long_short'] = da.lp_portfolio()
+   594                                                     except ValueError as e:
+   595                                                         global_dict[int(userId)]['finished'] = 'True'
+   596                                                         global_dict[int(userId)]['error'] = str(e)
+   597                                                         mc.set("global_dict", global_dict)
+   598                                                         return
+   599                                         
+   600                                                     #Maximise return for a given risk, with L2 regularisation
+   601                                                     mc.set(str(userId)+'_volatility', float(request.form.get("volatility")))
+   602                                                     mc.set(str(userId)+'_gamma', float(request.form.get("gamma")))
+   603                                                     mc.set(str(userId)+'_cvar', request.form.get("cvar"))
+   604                                                     mc.set(str(userId)+'_return', request.form.get("return"))
+   605                                                     try:
+   606                                                         ef = EfficientFrontier(mu, S)
+   607                                                         ef.add_objective(objective_functions.L2_reg, gamma=(float(request.form.get("gamma"))))  # gamme is the tuning parameter
+   608                                                         ef.efficient_risk(float(request.form.get("volatility"))/100)
+   609                                                         weights = ef.clean_weights()
+   610                                                         su = pd.DataFrame([weights])
+   611                                                         #finding zero weights
+   612                                                         num_small = len([k for k in weights if weights[k] <= 1e-4])
+   613                                                         global_dict[int(userId)]['num_small'] = str(f"{num_small}/{len(ef.tickers)} tickers have zero weight")
+   614                                                         fig = px.pie(su, values=weights.values(), names=su.columns)
+   615                                                         fig.update_traces(textposition='inside')
+   616                                                         fig.update_layout(width=500, height=500, uniformtext_minsize=12, uniformtext_mode='hide', title_text='Weights Distribution using Capital Asset Pricing Model', title_x=0.5)
+   617                                                         global_dict[int(userId)]['plot_json_L2_weights'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   618                                                         global_dict[int(userId)]['perf_L2'] = ef.portfolio_performance()
+   619                                                     except Exception as e:
+   620                                                         global_dict[int(userId)]['finished'] = 'True'
+   621                                                         global_dict[int(userId)]['error'] = str(e)
+   622                                                         mc.set("global_dict", global_dict)
+   623                                                         return
+   624                                         
+   625                                         
+   626                                                     #if we want to buy the portfolio mentioned above
+   627                                                     da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
+   628                                                     alloc, global_dict[int(userId)]['leftover_L2'] = da.lp_portfolio()
+   629                                                     global_dict[int(userId)]['alloc_L2']=alloc
+   630                                                     fig= px.pie(alloc.keys(), values=alloc.values(), names=alloc.keys())
+   631                                                     fig.update_traces(textposition='inside')
+   632                                                     fig.update_layout(width=500, height=500, uniformtext_minsize=12, font=dict(size=10), uniformtext_mode='hide', title_text='Suggested Portfolio Distribution using Capital Asset Pricing Model', title_x=0.5)
+   633                                                     global_dict[int(userId)]['plot_json_L2_port'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   634                                         
+   635                                                     #Efficient semi-variance optimization
+   636                                                     returns = pypfopt.expected_returns.returns_from_prices(prices)
+   637                                                     returns = returns.dropna()
+   638                                                     es = EfficientSemivariance(mu, returns)
+   639                                                     try:
+   640                                                         es.efficient_return(float(request.form.get("return"))/100)
+   641                                                     except ValueError as e:
+   642                                                         global_dict[int(userId)]['finished'] = 'True'
+   643                                                         global_dict[int(userId)]['error'] = str(e)
+   644                                                         mc.set("global_dict", global_dict)
+   645                                                         return
+   646                                                     global_dict[int(userId)]['perf_semi_v']=es.portfolio_performance()
+   647                                                     weights = es.clean_weights()
+   648                                         
+   649                                                     #if we want to buy the portfolio mentioned above
+   650                                                     da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
+   651                                                     alloc, global_dict[int(userId)]['leftover_semi_v'] = da.lp_portfolio()
+   652                                                     global_dict[int(userId)]['alloc_semi_v'] = alloc
+   653                                                     fig = px.pie(alloc.keys(), values=alloc.values(), names=alloc.keys())
+   654                                                     fig.update_traces(textposition='inside')
+   655                                                     fig.update_layout(width=500, height=500, uniformtext_minsize=12, font=dict(size=10), uniformtext_mode='hide', title_text='Suggested Portfolio Distribution using Capital Asset Pricing Model', title_x=0.5)
+   656                                                     global_dict[int(userId)]['plot_json_semi_v'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+   657                                                     global_dict[int(userId)]['ret']=float(request.form.get("return"))
+   658                                                     global_dict[int(userId)]['gamma']=request.form.get("gamma")
+   659                                                     global_dict[int(userId)]['volatility']=request.form.get("volatility")
+   660                                         
+   661                                                     #construct the portfolio with the minimum CVaR
+   662                                                     returns =pypfopt.expected_returns.returns_from_prices(prices).dropna()
+   663                                                     global_dict[int(userId)]['cvar_value']=request.form.get("cvar")
+   664                                                     ef = EfficientFrontier(mu, S)

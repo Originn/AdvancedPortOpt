@@ -1,6 +1,7 @@
 """Application entry point."""
 from application import init_app
 
+
 app = init_app()
 
 @app.after_request

@@ -3,6 +3,7 @@ import typing as t
 import warnings
 from collections.abc import MutableMapping
 from datetime import datetime
+from datetime import timezone
 
 from itsdangerous import BadSignature
 from itsdangerous import URLSafeTimedSerializer
@@ -11,7 +12,7 @@ from werkzeug.datastructures import CallbackDict
 from .helpers import is_ip
 from .json.tag import TaggedJSONSerializer
 
-if t.TYPE_CHECKING:
+if t.TYPE_CHECKING:  # pragma: no cover
     import typing_extensions as te
     from .app import Flask
     from .wrappers import Request, Response
@@ -176,11 +177,8 @@ class SessionInterface:
         return isinstance(obj, self.null_session_class)
 
     def get_cookie_name(self, app: "Flask") -> str:
-        """Returns the name of the session cookie.
-
-        Uses ``app.session_cookie_name`` which is set to ``SESSION_COOKIE_NAME``
-        """
-        return app.session_cookie_name
+        """The name of the session cookie. Uses``app.config["SESSION_COOKIE_NAME"]``."""
+        return app.config["SESSION_COOKIE_NAME"]
 
     def get_cookie_domain(self, app: "Flask") -> t.Optional[str]:
         """Returns the domain that should be set for the session cookie.
@@ -277,7 +275,7 @@ class SessionInterface:
         lifetime configured on the application.
         """
         if session.permanent:
-            return datetime.utcnow() + app.permanent_session_lifetime
+            return datetime.now(timezone.utc) + app.permanent_session_lifetime
         return None
 
     def should_set_cookie(self, app: "Flask", session: SessionMixin) -> bool:
@@ -383,13 +381,19 @@ class SecureCookieSessionInterface(SessionInterface):
         path = self.get_cookie_path(app)
         secure = self.get_cookie_secure(app)
         samesite = self.get_cookie_samesite(app)
+        httponly = self.get_cookie_httponly(app)
 
         # If the session is modified to be empty, remove the cookie.
         # If the session is empty, return without setting the cookie.
         if not session:
             if session.modified:
                 response.delete_cookie(
-                    name, domain=domain, path=path, secure=secure, samesite=samesite
+                    name,
+                    domain=domain,
+                    path=path,
+                    secure=secure,
+                    samesite=samesite,
+                    httponly=httponly,
                 )
 
             return
@@ -401,7 +405,6 @@ class SecureCookieSessionInterface(SessionInterface):
         if not self.should_set_cookie(app, session):
             return
 
-        httponly = self.get_cookie_httponly(app)
         expires = self.get_expiration_time(app, session)
         val = self.get_signing_serializer(app).dumps(dict(session))  # type: ignore
         response.set_cookie(

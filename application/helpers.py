@@ -91,7 +91,7 @@ def GBPtoUSD():
     return GBPvalue
 
 def contains_multiple_words(s):
-  return len(s.split()) > 1
+  return len(s) > 1
 
 #function that build the list of tickers
 def symbol_search():

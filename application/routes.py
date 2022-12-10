@@ -1,6 +1,6 @@
 from flask import current_app as app
 from flask import render_template, g
-from helpers import login_required
+from application.helpers import login_required, price_lookup, clean_header, usd, GBPtoUSD, contains_multiple_words, lookup, gbp
 from werkzeug.exceptions import default_exceptions, HTTPException, InternalServerError
 from flask import Flask, flash, redirect, render_template, request, session, url_for, copy_current_request_context, jsonify
 from flask_sqlalchemy import SQLAlchemy
@@ -10,11 +10,10 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from sqlalchemy import func, cast, Date, desc
-from helpers import price_lookup, clean_header, usd, GBPtoUSD, contains_multiple_words, lookup, gbp
 import yfinance as yf
 from datetime import datetime
 from flask_session import Session
-from models import db, Records, Users, History, Build, Test, Stocks
+from application.db import db, Records, Users, History, Build, Test, Stocks
 import random
 import yfinance.shared as shared
 import numpy as np
@@ -24,9 +23,13 @@ from pypfopt import EfficientFrontier
 from multiprocessing import Process
 from pandas_datareader import data
 from threading import Thread
+import memory_profiler
+import threading
+import gc
+from concurrent.futures import ThreadPoolExecutor
 
 
-global_dict = {}
+fp=open('memory_profiler.log','w+')
 
 yf.pdr_override()
 # Ensure responses aren't cached
@@ -396,30 +399,36 @@ def expected_returns():
 
 @app.route("/build",methods=["GET", "POST"])
 @login_required
+@memory_profiler.profile(stream=fp)
 def build():
-    global global_dict
+    #thread_pool = ThreadPoolExecutor(max_workers=4)
+    global_dict = {}
     userId = session['user_id']
     global_dict[int(userId)] = {}
     if request.method == "POST":
         #global global_dict
         global_dict[int(userId)]['finished'] = 'False'
         tickers = request.form.get("symbols")
-        tickers = tickers.split()
+        tickers = list(set(tickers.split()))
         @copy_current_request_context
         def operation(global_dict, session):
             symbols = request.form.get("symbols")
             mc.set(str(userId) + "_symbols", symbols)
+            symbols = list(set(symbols.split()))
             if contains_multiple_words(symbols) == False:
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = "The app purpose is to optimize a portfolio given a list of stocks. Please enter a list of stocks seperated by a new row."
+                mc.set("global_dict", global_dict)
                 return
             if float(request.form.get("funds")) <= 0 or float(request.form.get("funds")) == " ":
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = "Amount need to be a positive number"
+                mc.set("global_dict", global_dict)
                 return
-            Build(session["user_id"], symbols.upper(), request.form.get("start"), request.form.get("end"), request.form.get("funds"), request.form.get("short"), request.form.get("volatility"), request.form.get("gamma"), request.form.get("return"))
+            Build(session["user_id"], request.form.get("symbols").upper(), request.form.get("start"), request.form.get("end"), request.form.get("funds"), request.form.get("short"), request.form.get("volatility"), request.form.get("gamma"), request.form.get("return"))
             db.session.commit()
             try:
+                mc.set(str(userId)+'start_date', request.form.get("start"))
                 df = yf.download(symbols, start=request.form.get("start"), end=request.form.get("end"), auto_adjust = False, prepost = False, threads = True, proxy = None)["Adj Close"].dropna(axis=1, how='all')
                 failed=(list(shared._ERRORS.keys()))
                 df = df.replace(0, np.nan)
@@ -428,11 +437,13 @@ def build():
                 except IndexError:
                     global_dict[int(userId)]['finished'] = 'True'
                     global_dict[int(userId)]['error'] = "Please enter valid stocks from Yahoo Finance."
+                    mc.set("global_dict", global_dict)
                     return
                 df = df.loc[:,df.iloc[-2,:].notna()]
             except ValueError:
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = "Please enter a valid symbols (taken from Yahoo Finance)"
+                mc.set("global_dict", global_dict)
                 return
 
             prices = df.copy()
@@ -527,19 +538,23 @@ def build():
                 except IndexError:
                     global_dict[int(userId)]['finished'] = 'True'
                     global_dict[int(userId)]['error'] = "There is an issue with Yahoo API please try again later"
+                    mc.set("global_dict", global_dict)
                     return
                 # prices as of the day you are allocating
                 if float(request.form.get("funds")) < float(latest_prices.min()):
                     global_dict[int(userId)]['finished'] = 'True'
                     global_dict[int(userId)]['error'] = "Amount is not high enough to cover the lowest priced stock"
+                    mc.set("global_dict", global_dict)
                     return
                 try:
                     da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
+                    mc.set(str(userId) + '_funds', float(request.form.get("funds")))
                 except TypeError:
                     delisted=prices.columns[df.isna().any()].tolist()
                     delisted= ", ".join(delisted)
                     global_dict[int(userId)]['finished'] = 'True'
                     global_dict[int(userId)]['error'] = "Can't get latest prices for the following stock/s, please remove to contiue :" + delisted
+                    mc.set("global_dict", global_dict)
                     return
                 alloc, global_dict[int(userId)]['leftover_min_vol_long'] = da.lp_portfolio()
                 global_dict[int(userId)]['alloc_min_vol_long']=alloc
@@ -550,6 +565,7 @@ def build():
             except ValueError as e:
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = str(e)
+                mc.set("global_dict", global_dict)
                 return
 
             #using risk models optimized for the Efficient frontier to reduce to min volitility, good for crypto currencies ('long and short')
@@ -572,18 +588,24 @@ def build():
                     delisted= ", ".join(delisted)
                     global_dict[int(userId)]['finished'] = 'True'
                     global_dict[int(userId)]['error'] = "Can't get latest prices for the following stock/s, please remove to contiue :" + delisted
+                    mc.set("global_dict", global_dict)
                     return
                 global_dict[int(userId)]['alloc_min_vol_long_short'], global_dict[int(userId)]['leftover_min_vol_long_short'] = da.lp_portfolio()
             except ValueError as e:
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = str(e)
+                mc.set("global_dict", global_dict)
                 return
 
             #Maximise return for a given risk, with L2 regularisation
+            mc.set(str(userId)+'_volatility', float(request.form.get("volatility")))
+            mc.set(str(userId)+'_gamma', float(request.form.get("gamma")))
+            mc.set(str(userId)+'_cvar', request.form.get("cvar"))
+            mc.set(str(userId)+'_return', request.form.get("return"))
             try:
                 ef = EfficientFrontier(mu, S)
                 ef.add_objective(objective_functions.L2_reg, gamma=(float(request.form.get("gamma"))))  # gamme is the tuning parameter
-                ef.efficient_risk(int(request.form.get("volatility"))/100)
+                ef.efficient_risk(float(request.form.get("volatility"))/100)
                 weights = ef.clean_weights()
                 su = pd.DataFrame([weights])
                 #finding zero weights
@@ -597,6 +619,7 @@ def build():
             except Exception as e:
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = str(e)
+                mc.set("global_dict", global_dict)
                 return
 
 
@@ -618,6 +641,7 @@ def build():
             except ValueError as e:
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = str(e)
+                mc.set("global_dict", global_dict)
                 return
             global_dict[int(userId)]['perf_semi_v']=es.portfolio_performance()
             weights = es.clean_weights()
@@ -651,16 +675,17 @@ def build():
                 ec.efficient_risk(target_cvar=float(request.form.get("cvar"))/100)
             except:
                 global_dict[int(userId)]['finished'] = 'True'
-                global_dict[int(userId)]['error'] = "CVaR can't be performed with the current specifications"
+                global_dict[int(userId)]['error'] = f"Please enter CVaR higher than {round(global_dict[int(userId)]['cvar']*100, 1)}%"
+                mc.set("global_dict", global_dict)
                 return
             weights = ec.clean_weights()
             da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
             global_dict[int(userId)]['alloc_cvar'], global_dict[int(userId)]['leftover_cvar'] = da.lp_portfolio()
             global_dict[int(userId)]['target_CVaR_exp_rtn'], global_dict[int(userId)]['target_CVaR_cond_val_risk'] = ec.portfolio_performance()
-            mc.delete(str(userId) + "_symbols")
             global_dict[int(userId)]['finished'] = 'True'
-        global t1
-        t1 = Thread(target=operation, args=[global_dict, session], name = str(userId)+'_operation_thread', daemon=True)
+            mc.set("global_dict", global_dict)
+            return
+        t1 = Thread(target=operation, args=[global_dict, session])
         t1.start()
 
         @copy_current_request_context
@@ -668,7 +693,10 @@ def build():
             for ticker in tickers:
                 ticker=ticker.upper()
                 if any(sublist[1]==ticker in sublist for sublist in nasdaq_exchange_info) is False:
-                    ticker_ln = yf.Ticker(ticker).stats()["price"].get('longName')
+                    try:
+                        ticker_ln = yf.Ticker(ticker).stats()["price"].get('longName')
+                    except:
+                        continue
                     if not ticker_ln:
                         ticker_ln = ticker
                     ticker_list=[ticker_ln, ticker]
@@ -676,37 +704,46 @@ def build():
                     db.session.add(new_stock)
                     db.session.commit()
                     nasdaq_exchange_info.extend([ticker_list])
+                    return
         #global nasdaq_exchange_info
-        global t2
-        t2 = Thread(target=enter_sql_data, args=[nasdaq_exchange_info, tickers], name=str(userId)+'_sql_thread', daemon=True)
+        t2 = Thread(target=enter_sql_data, args=[nasdaq_exchange_info, tickers])
         t2.start()
+        t1.join()
+        t2.join()
+        #thread_pool.shutdown()
         return render_template("loading.html")
     else:
-        if mc.get(str(userId) + "_symbols"):
-            cached_symbols=mc.get(str(userId) + "_symbols")
-        else:
-            cached_symbols=''
+        cached_symbols = mc.get(str(userId) + "_symbols") if mc.get(str(userId) + "_symbols") else ''
+        start_cached = mc.get(str(userId)+'start_date') if mc.get(str(userId)+'start_date') else 0
+        funds_cached = mc.get(str(userId) + '_funds') if mc.get(str(userId) + '_funds') else 0
+        vol_cached = mc.get(str(userId)+'_volatility') if mc.get(str(userId)+'_volatility') else 0
+        gamma_cached = mc.get(str(userId)+'_gamma') if mc.get(str(userId)+'_gamma') else 0
+        cvar_cached = mc.get(str(userId)+'_cvar') if mc.get(str(userId)+'_cvar') else 0
+        return_cached = mc.get(str(userId)+'_return') if mc.get(str(userId)+'_return') else 0
+
         availableCash=db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
-        return render_template("build.html", availableCash=round(availableCash, 4), GBP=GBPtoUSD(), nasdaq_exchange_info=nasdaq_exchange_info, cached_symbols=cached_symbols, top_50_crypto=top_50_crypto, top_world_stocks=top_world_stocks, top_US_stocks=top_US_stocks, top_div=top_div, win_loss_signal = win_loss_signal, win_loss_trend=win_loss_trend)
+        return render_template("build.html", availableCash=round(availableCash, 4), GBP=GBPtoUSD(), nasdaq_exchange_info=nasdaq_exchange_info, return_cached = return_cached, cvar_cached = cvar_cached, gamma_cached = gamma_cached, vol_cached = vol_cached, funds_cached = funds_cached, start_cached = start_cached, cached_symbols=cached_symbols, top_50_crypto=top_50_crypto, top_world_stocks=top_world_stocks, top_US_stocks=top_US_stocks, top_div=top_div, win_loss_signal = win_loss_signal, win_loss_trend=win_loss_trend)
 
 
 @app.route('/result')
+@login_required
 def result():
-    # t1.join()
-    # t2.join()
+    global_dict = mc.get("global_dict")
     userId = session['user_id']
-    try:
-        return render_template("built.html", num_small=global_dict[int(userId)]['num_small'], plot_json_weights_min_vol_long=global_dict[int(userId)]['plot_json_weights_min_vol_long'], av_min_vol_long=global_dict[int(userId)]['av_min_vol_long'], leftover_min_vol_long=global_dict[int(userId)]['leftover_min_vol_long'], alloc_min_vol_long = global_dict[int(userId)]['alloc_min_vol_long'], plot_json_dist_min_vol_long=global_dict[int(userId)]['plot_json_dist_min_vol_long'], av = global_dict[int(userId)]['av'], leftover_min_vol_long_short=global_dict[int(userId)]['leftover_min_vol_long_short'], alloc_min_vol_long_short=global_dict[int(userId)]['alloc_min_vol_long_short'], ret=global_dict[int(userId)]['ret'],gamma=global_dict[int(userId)]['gamma'],volatility=global_dict[int(userId)]['volatility'], perf_L2=global_dict[int(userId)]['perf_L2'], perf_semi_v=global_dict[int(userId)]['perf_semi_v'], alloc_L2=global_dict[int(userId)]['alloc_L2'], alloc_semi_v=global_dict[int(userId)]['alloc_semi_v'], plot_json_graph=global_dict[int(userId)]['plot_json_graph'], plot_json_exp_cov=global_dict[int(userId)]['plot_json_exp_cov'], plot_json_Ledoit_Wolf=global_dict[int(userId)]['plot_json_Ledoit_Wolf'], plot_json_weight_min_vol_long_short=global_dict[int(userId)]['plot_json_weight_min_vol_long_short'], plot_json_L2_weights=global_dict[int(userId)]['plot_json_L2_weights'], plot_json_L2_port = global_dict[int(userId)]['plot_json_L2_port'], plot_json_semi_v = global_dict[int(userId)]['plot_json_semi_v'], leftover_L2=global_dict[int(userId)]['leftover_L2'], leftover_semi_v=global_dict[int(userId)]['leftover_semi_v'],listofna=(', '.join(global_dict[int(userId)]['listofna'])), min_cvar_rtn = global_dict[int(userId)]['target_CVaR_exp_rtn'], min_cvar_risk = global_dict[int(userId)]['target_CVaR_cond_val_risk'], var = global_dict[int(userId)]['var'], cvar = global_dict[int(userId)]['cvar'], plot_json_cvar=global_dict[int(userId)]['plot_json_cvar'], cvar_value=global_dict[int(userId)]['cvar_value'], alloc_cvar = global_dict[int(userId)]['alloc_cvar'], leftover_cvar = global_dict[int(userId)]['leftover_cvar'])
-    except:
-        try:
-            return_error = str(global_dict[int(userId)]['error'])
-            flash(return_error)
-            return redirect("/build")
-        except:
-            return redirect("/build")
+    # try:
+    return render_template("built.html", num_small=global_dict[int(userId)]['num_small'], plot_json_weights_min_vol_long=global_dict[int(userId)]['plot_json_weights_min_vol_long'], av_min_vol_long=global_dict[int(userId)]['av_min_vol_long'], leftover_min_vol_long=global_dict[int(userId)]['leftover_min_vol_long'], alloc_min_vol_long = global_dict[int(userId)]['alloc_min_vol_long'], plot_json_dist_min_vol_long=global_dict[int(userId)]['plot_json_dist_min_vol_long'], av = global_dict[int(userId)]['av'], leftover_min_vol_long_short=global_dict[int(userId)]['leftover_min_vol_long_short'], alloc_min_vol_long_short=global_dict[int(userId)]['alloc_min_vol_long_short'], ret=global_dict[int(userId)]['ret'],gamma=global_dict[int(userId)]['gamma'],volatility=global_dict[int(userId)]['volatility'], perf_L2=global_dict[int(userId)]['perf_L2'], perf_semi_v=global_dict[int(userId)]['perf_semi_v'], alloc_L2=global_dict[int(userId)]['alloc_L2'], alloc_semi_v=global_dict[int(userId)]['alloc_semi_v'], plot_json_graph=global_dict[int(userId)]['plot_json_graph'], plot_json_exp_cov=global_dict[int(userId)]['plot_json_exp_cov'], plot_json_Ledoit_Wolf=global_dict[int(userId)]['plot_json_Ledoit_Wolf'], plot_json_weight_min_vol_long_short=global_dict[int(userId)]['plot_json_weight_min_vol_long_short'], plot_json_L2_weights=global_dict[int(userId)]['plot_json_L2_weights'], plot_json_L2_port = global_dict[int(userId)]['plot_json_L2_port'], plot_json_semi_v = global_dict[int(userId)]['plot_json_semi_v'], leftover_L2=global_dict[int(userId)]['leftover_L2'], leftover_semi_v=global_dict[int(userId)]['leftover_semi_v'],listofna=(', '.join(global_dict[int(userId)]['listofna'])), min_cvar_rtn = global_dict[int(userId)]['target_CVaR_exp_rtn'], min_cvar_risk = global_dict[int(userId)]['target_CVaR_cond_val_risk'], var = global_dict[int(userId)]['var'], cvar = global_dict[int(userId)]['cvar'], plot_json_cvar=global_dict[int(userId)]['plot_json_cvar'], cvar_value=global_dict[int(userId)]['cvar_value'], alloc_cvar = global_dict[int(userId)]['alloc_cvar'], leftover_cvar = global_dict[int(userId)]['leftover_cvar'])
+    # except:
+    #     try:
+    #         return_error = str(global_dict[int(userId)]['error'])
+    #         flash(return_error)
+    #         return redirect("/build")
+    #     except:
+    #         print('erorr')
+    #         return redirect("/build")
 
 
 @app.route('/result_alloc')
+@login_required
 def result_alloc():
     try:
         return redirect("/")
@@ -719,9 +756,14 @@ def result_alloc():
             return redirect("/build")
 
 @app.route('/status')
+@login_required
 def thread_status():
     userId = session['user_id']
-    return jsonify(dict(status=('finished' if (global_dict[int(userId)]['finished'] == 'True') else 'running')))
+    global_dict = mc.get("global_dict")
+    if global_dict is not None:
+        return jsonify(dict(status=('finished' if (global_dict[int(userId)]['finished'] == 'True') else 'running')))
+    else:
+        return jsonify(dict(status='running'))
 
 @app.route("/allocation", methods=["POST"])
 @login_required

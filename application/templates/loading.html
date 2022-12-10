@@ -23,8 +23,8 @@
           function(data) {
             console.log(data);
             if (data.status == 'finished') {
-              window.location.replace("{{ url_for('result') }}");
               clearInterval(refresh_id);
+              window.location.replace("{{ url_for('result') }}");
             }
           }
         )}

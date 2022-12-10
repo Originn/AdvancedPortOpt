@@ -7,12 +7,12 @@ from dash import dash_table
 from flask import current_app as app
 from flask_sqlalchemy import SQLAlchemy
 from flask import session, redirect, flash
-from models import db, Records, History, Users
+from application.db import db, Records, History, Users
 import pandas as pd
 from datetime import datetime
 from pandas.tseries.offsets import BDay
 import pandas_datareader.data as web
-from helpers import clean_header, price_lookup, GBPtoUSD, gbp
+from application.helpers import clean_header, price_lookup, GBPtoUSD, gbp
 import plotly.graph_objects as go
 import plotly.express as px
 from werkzeug.routing import Map

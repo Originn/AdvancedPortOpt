@@ -34,19 +34,17 @@ def init_app():
                                     'remove_failed': 1,
                                     'retry_timeout': 2,
                                     'dead_timeout': 30,
-                               })
-        )
+                               }))
     Session(app)
 
     with app.app_context():
         # Import parts of our core Flask app
-        from . import routes
+        from application import routes
         from .assets import compile_static_assets
 
         # Import Dash application
         from .dashboard.dashboard import init_dashboard
         #with app.test_request_context():
-
         app=init_dashboard(app)
         # Compile static assets
         compile_static_assets(assets)
