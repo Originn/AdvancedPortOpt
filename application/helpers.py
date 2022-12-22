@@ -143,7 +143,7 @@ def stock_splits_update(*args):
 
 @sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=30)
 def get_list_win_loss():
-    #getting list of top 100 crypto currencies
+
     headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
     win_loss_symbols = []
     win_loss_symbols_Url = 'https://finviz.com/'
@@ -178,7 +178,7 @@ def top_40_mcap_world_higher_then_10pc_div():
 
 @sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=26)
 def get_list_of_crypto_currencies():
-    #getting list of top 100 crypto currencies
+
     headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
     CryptoCurrenciesUrl = 'https://finance.yahoo.com/crypto/?count=50&offset=0'
     r= get(CryptoCurrenciesUrl, headers=headers)
@@ -198,7 +198,7 @@ def get_list_of_crypto_currencies():
 
 @sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=24)
 def get_list_of_top_world():
-    #getting list of top 100 crypto currencies
+
     headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
     world_symbols = []
     for i in range(1, 61, 20):
@@ -210,9 +210,10 @@ def get_list_of_top_world():
             world_symbols.append(listing.get_text())
     return mc.set("top_world", world_symbols)
 
-@sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=22)
+#@sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=22)
+@copy_current_request_context
 def get_list_of_top_US():
-    #getting list of top 100 crypto currencies
+
     headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
     US_symbols = []
     for i in range(1, 41, 20):
