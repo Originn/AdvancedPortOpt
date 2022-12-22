@@ -215,16 +215,18 @@ def get_list_of_top_world():
 #@copy_current_request_context
 @manager.command
 def get_list_of_top_US():
-    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
-    US_symbols = []
-    for i in range(1, 41, 20):
-        US_symbolsUrl = 'https://finviz.com/screener.ashx?v=111&f=geo_usa&o=-marketcap&r=' + str(i)
-        r= get(US_symbolsUrl, headers=headers)
-        data=r.text
-        soup=BeautifulSoup(data, 'html.parser')
-        for listing in soup.find_all('a', attrs={'class':'screener-link-primary'}):
-            US_symbols.append(listing.get_text())
-    print('hello')
-    return mc.set("top_US", US_symbols)
+    app1=app._get_current_object()
+    with app1.app_context():
+        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
+        US_symbols = []
+        for i in range(1, 41, 20):
+            US_symbolsUrl = 'https://finviz.com/screener.ashx?v=111&f=geo_usa&o=-marketcap&r=' + str(i)
+            r= get(US_symbolsUrl, headers=headers)
+            data=r.text
+            soup=BeautifulSoup(data, 'html.parser')
+            for listing in soup.find_all('a', attrs={'class':'screener-link-primary'}):
+                US_symbols.append(listing.get_text())
+        print('hello')
+        return mc.set("top_US", US_symbols)
 
 sched.start()
