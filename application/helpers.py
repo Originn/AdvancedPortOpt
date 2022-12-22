@@ -124,25 +124,24 @@ def symbol_search():
     nasdaq_exchange_info_dict=dict(map(reversed, nasdaq_exchange_info))
     return mc.set("nasdaq_exchange_info", nasdaq_exchange_info), mc.set("nasdaq_exchange_info_dict", nasdaq_exchange_info_dict)
 
+@manager.command
 def stock_splits_update(*args):
-    app1=app._get_current_object()
-    with app1.app_context():
-        from .db import db, Records
-        from sqlalchemy import func, cast, Date
-        stocks=[[s, et, ls] for s, et, ls in db.session.query(Records.symbol, func.to_char(Records.execution_time.cast(Date), 'yyyy-mm-dd'), Records.last_split).distinct().all()]
-        for stock, date, ls in stocks:
-            splits=yf.Ticker(stock).splits
-            last_split_amount=splits.tail(1)[0]
-            last_split_date=splits.tail(1).index[0].strftime('%Y-%m-%d')
-            if ls is None:
-                db.session.query(Records).filter(Records.symbol==stock).update({'last_split':last_split_date})
-            elif ls < last_split_date:
-                db.session.query(Records).filter(Records.symbol==stock).update({'last_split':last_split_date})
-                db.session.query(Records).filter(Records.symbol==stock, func.to_char(Records.execution_time.cast(Date), 'yyyy-mm-dd')<last_split_date).update({'number_of_shares': Records.number_of_shares*last_split_amount, 'purchase_p': Records.purchase_p/last_split_amount}, synchronize_session='fetch')
-            db.session.commit()
+    from .db import db, Records
+    from sqlalchemy import func, cast, Date
+    stocks=[[s, et, ls] for s, et, ls in db.session.query(Records.symbol, func.to_char(Records.execution_time.cast(Date), 'yyyy-mm-dd'), Records.last_split).distinct().all()]
+    for stock, date, ls in stocks:
+        splits=yf.Ticker(stock).splits
+        last_split_amount=splits.tail(1)[0]
+        last_split_date=splits.tail(1).index[0].strftime('%Y-%m-%d')
+        if ls is None:
+            db.session.query(Records).filter(Records.symbol==stock).update({'last_split':last_split_date})
+        elif ls < last_split_date:
+            db.session.query(Records).filter(Records.symbol==stock).update({'last_split':last_split_date})
+            db.session.query(Records).filter(Records.symbol==stock, func.to_char(Records.execution_time.cast(Date), 'yyyy-mm-dd')<last_split_date).update({'number_of_shares': Records.number_of_shares*last_split_amount, 'purchase_p': Records.purchase_p/last_split_amount}, synchronize_session='fetch')
+        db.session.commit()
 
 
-@sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=30)
+#@sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=30)
 def get_list_win_loss():
 
     headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
@@ -163,7 +162,7 @@ def get_list_win_loss():
     mc.set("win_loss_signal", win_loss_signal)
     mc.set("win_loss_trend", win_loss_trend)
 
-@sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=28)
+#@sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=28)
 #gathering top 40 matket cap stocks with dividend higher then 10%
 def top_40_mcap_world_higher_then_10pc_div():
     headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
@@ -177,7 +176,7 @@ def top_40_mcap_world_higher_then_10pc_div():
             div_symbols.append(listing.get_text())
     return mc.set("top_div", div_symbols)
 
-@sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=26)
+#@sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=26)
 def get_list_of_crypto_currencies():
 
     headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
@@ -197,7 +196,7 @@ def get_list_of_crypto_currencies():
             pass
     return mc.set("top_50_crypto", crypto_symbols)
 
-@sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=24)
+#@sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=24)
 def get_list_of_top_world():
 
     headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
@@ -213,7 +212,7 @@ def get_list_of_top_world():
 
 #@sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=22)
 #@copy_current_request_context
-@manager.command
+
 def get_list_of_top_US():
     headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
     US_symbols = []
