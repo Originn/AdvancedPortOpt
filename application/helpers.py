@@ -140,7 +140,7 @@ def stock_splits_update(*args):
                 db.session.query(Records).filter(Records.symbol==stock).update({'last_split':last_split_date})
                 db.session.query(Records).filter(Records.symbol==stock, func.to_char(Records.execution_time.cast(Date), 'yyyy-mm-dd')<last_split_date).update({'number_of_shares': Records.number_of_shares*last_split_amount, 'purchase_p': Records.purchase_p/last_split_amount}, synchronize_session='fetch')
             db.session.commit()
-stock_splits_update()
+
 
 @sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=30)
 def get_list_win_loss():
@@ -215,18 +215,16 @@ def get_list_of_top_world():
 #@copy_current_request_context
 @manager.command
 def get_list_of_top_US():
-    app1=app._get_current_object()
-    with app1.app_context():
-        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
-        US_symbols = []
-        for i in range(1, 41, 20):
-            US_symbolsUrl = 'https://finviz.com/screener.ashx?v=111&f=geo_usa&o=-marketcap&r=' + str(i)
-            r= get(US_symbolsUrl, headers=headers)
-            data=r.text
-            soup=BeautifulSoup(data, 'html.parser')
-            for listing in soup.find_all('a', attrs={'class':'screener-link-primary'}):
-                US_symbols.append(listing.get_text())
-        print('hello')
-        return mc.set("top_US", US_symbols)
+    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
+    US_symbols = []
+    for i in range(1, 41, 20):
+        US_symbolsUrl = 'https://finviz.com/screener.ashx?v=111&f=geo_usa&o=-marketcap&r=' + str(i)
+        r= get(US_symbolsUrl, headers=headers)
+        data=r.text
+        soup=BeautifulSoup(data, 'html.parser')
+        for listing in soup.find_all('a', attrs={'class':'screener-link-primary'}):
+            US_symbols.append(listing.get_text())
+    print('hello')
+    return mc.set("top_US", US_symbols)
 
 sched.start()
