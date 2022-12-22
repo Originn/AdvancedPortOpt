@@ -699,6 +699,7 @@ def build():
                     nasdaq_exchange_info.extend([ticker_list])
                     return
         #global nasdaq_exchange_info
+        global t2
         t2 = Thread(target=enter_sql_data, args=[nasdaq_exchange_info, tickers])
         t2.start()
         return render_template("loading.html")
@@ -720,6 +721,7 @@ def build():
 @login_required
 def result():
     t1.join()
+    t2.join()
     global_dict = mc.get("global_dict")
     userId = session['user_id']
     try:
