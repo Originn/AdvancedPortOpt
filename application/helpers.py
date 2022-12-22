@@ -2,7 +2,7 @@ import os
 import requests, bmemcached
 import yfinance as yf
 import pandas as pd
-from flask import redirect, session, copy_current_request_context
+from flask import redirect, session
 from functools import wraps
 from io import BytesIO
 from ftplib import FTP
@@ -11,9 +11,10 @@ from flask import current_app as app
 from bs4 import BeautifulSoup
 from requests import get
 from string import *
+from flask_script import Manager
 
 sched = BackgroundScheduler()
-
+manager = Manager(app)
 #set memcache in Heroku
 servers = os.environ.get('MEMCACHIER_SERVERS', '').split(',')
 user = os.environ.get('MEMCACHIER_USERNAME', '')
@@ -211,9 +212,9 @@ def get_list_of_top_world():
     return mc.set("top_world", world_symbols)
 
 #@sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=22)
-@copy_current_request_context
+#@copy_current_request_context
+@manager.command
 def get_list_of_top_US():
-
     headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
     US_symbols = []
     for i in range(1, 41, 20):
