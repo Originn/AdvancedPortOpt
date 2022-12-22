@@ -2,7 +2,7 @@ import os
 import requests, bmemcached
 import yfinance as yf
 import pandas as pd
-from flask import redirect, session
+from flask import redirect, session, copy_current_request_context
 from functools import wraps
 from io import BytesIO
 from ftplib import FTP
