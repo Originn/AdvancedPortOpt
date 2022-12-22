@@ -11,7 +11,9 @@ from flask import current_app as app
 from bs4 import BeautifulSoup
 from requests import get
 from string import *
+from flask_script import Manager
 
+manager = Manager(app)
 sched = BackgroundScheduler()
 
 #set memcache in Heroku
@@ -222,6 +224,7 @@ def get_list_of_top_US():
         soup=BeautifulSoup(data, 'html.parser')
         for listing in soup.find_all('a', attrs={'class':'screener-link-primary'}):
             US_symbols.append(listing.get_text())
+    print('hello')
     return mc.set("top_US", US_symbols)
 
 sched.start()

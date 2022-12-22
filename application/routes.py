@@ -395,10 +395,10 @@ def expected_returns():
 @login_required
 def build():
     #thread_pool = ThreadPoolExecutor(max_workers=4)
-    global_dict = {}
-    userId = session['user_id']
-    global_dict[int(userId)] = {}
     if request.method == "POST":
+        global_dict = {}
+        userId = session['user_id']
+        global_dict[int(userId)] = {}
         global_dict[int(userId)]['finished'] = 'False'
         tickers = request.form.get("symbols")
         tickers = list(set(tickers.split()))
@@ -703,6 +703,7 @@ def build():
         t2.start()
         return render_template("loading.html")
     else:
+        userId = session['user_id']
         cached_symbols = mc.get(str(userId) + "_symbols") if mc.get(str(userId) + "_symbols") else ''
         start_cached = mc.get(str(userId)+'start_date') if mc.get(str(userId)+'start_date') else 0
         funds_cached = mc.get(str(userId) + '_funds') if mc.get(str(userId) + '_funds') else 0
