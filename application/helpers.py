@@ -11,9 +11,7 @@ from flask import current_app as app
 from bs4 import BeautifulSoup
 from requests import get
 from string import *
-from flask_script import Manager
 
-manager = Manager(app)
 sched = BackgroundScheduler()
 
 #set memcache in Heroku
