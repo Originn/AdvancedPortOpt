@@ -24,7 +24,8 @@ from multiprocessing import Process
 from pandas_datareader import data
 from threading import Thread
 
-
+t1 = Thread()
+t2 = Thread()
 yf.pdr_override()
 # Ensure responses aren't cached
 @app.after_request
@@ -717,6 +718,8 @@ def build():
 @app.route('/result')
 @login_required
 def result():
+    global t1
+    global t2
     t1.join()
     t2.join()
     global_dict = mc.get("global_dict")
@@ -727,15 +730,11 @@ def result():
         del global_dict
     except:
         try:
-            t1.join()
-            t2.join()
             return_error = str(global_dict[int(userId)]['error'])
             flash(return_error)
             return redirect("/build")
             del global_dict
         except:
-            t1.join()
-            t2.join()
             return redirect("/build")
             del global_dict
 
