@@ -717,8 +717,6 @@ def build():
 @app.route('/result')
 @login_required
 def result():
-    global t1
-    global t2
     t1.join()
     t2.join()
     global_dict = mc.get("global_dict")
@@ -729,8 +727,6 @@ def result():
         del global_dict
     except:
         try:
-            global t1
-            global t2
             t1.join()
             t2.join()
             return_error = str(global_dict[int(userId)]['error'])
@@ -738,8 +734,6 @@ def result():
             return redirect("/build")
             del global_dict
         except:
-            global t1
-            global t2
             t1.join()
             t2.join()
             return redirect("/build")
