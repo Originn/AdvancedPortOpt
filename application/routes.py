@@ -51,12 +51,9 @@ top_50_crypto=mc.get("top_50_crypto")
 top_world_stocks = mc.get("top_world")
 top_US_stocks= mc.get("top_US")
 top_div = mc.get("top_div")
-win_loss_signal= mc.get("win_loss_signal")
 win_loss_trend = mc.get("win_loss_trend")
 users_stocks = [[sn, s] for sn, s in db.session.query(Stocks.shortname, Stocks.symbol)]
 nasdaq_exchange_info.extend(users_stocks)
-
-#Session(app)
 
 @app.route("/")
 @login_required
@@ -712,7 +709,7 @@ def build():
         gamma_cached = mc.get(str(userId)+'_gamma') if mc.get(str(userId)+'_gamma') else 0
         cvar_cached = mc.get(str(userId)+'_cvar') if mc.get(str(userId)+'_cvar') else 0
         return_cached = mc.get(str(userId)+'_return') if mc.get(str(userId)+'_return') else 0
-
+        win_loss_signal= mc.get("win_loss_signal")
         availableCash=db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
         return render_template("build.html", availableCash=round(availableCash, 4), GBP=GBPtoUSD(), nasdaq_exchange_info=nasdaq_exchange_info, return_cached = return_cached, cvar_cached = cvar_cached, gamma_cached = gamma_cached, vol_cached = vol_cached, funds_cached = funds_cached, start_cached = start_cached, cached_symbols=cached_symbols, top_50_crypto=top_50_crypto, top_world_stocks=top_world_stocks, top_US_stocks=top_US_stocks, top_div=top_div, win_loss_signal = win_loss_signal, win_loss_trend=win_loss_trend)
 
@@ -757,10 +754,7 @@ def result_alloc():
 def thread_status():
     userId = session['user_id']
     global_dict = mc.get("global_dict")
-    if global_dict is not None:
-        return jsonify(dict(status=('finished' if (global_dict[int(userId)]['finished'] == 'True') else 'running')))
-    else:
-        return jsonify(dict(status='running'))
+    return jsonify(dict(status=('finished' if (global_dict[int(userId)]['finished'] == 'True') else 'running')))
 
 @app.route("/allocation", methods=["POST"])
 @login_required

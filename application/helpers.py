@@ -6,14 +6,14 @@ from flask import redirect, session
 from functools import wraps
 from io import BytesIO
 from ftplib import FTP
-from apscheduler.schedulers.background import BackgroundScheduler
+#from apscheduler.schedulers.background import BackgroundScheduler
 from flask import current_app as app
 from bs4 import BeautifulSoup
 from requests import get
 from string import *
 from flask_script import Manager
 
-sched = BackgroundScheduler()
+#sched = BackgroundScheduler()
 manager = Manager(app)
 #set memcache in Heroku
 servers = os.environ.get('MEMCACHIER_SERVERS', '').split(',')
@@ -143,7 +143,6 @@ def stock_splits_update(*args):
 
 #@sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=30)
 def get_list_win_loss():
-
     headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
     win_loss_symbols = []
     win_loss_symbols_Url = 'https://finviz.com/'
@@ -211,7 +210,6 @@ def get_list_of_top_world():
     return mc.set("top_world", world_symbols)
 
 #@sched.scheduled_job('cron',timezone="Europe/London", day_of_week='mon-fri', hour=5, minute=22)
-#@copy_current_request_context
 
 def get_list_of_top_US():
     headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'}
@@ -225,5 +223,3 @@ def get_list_of_top_US():
             US_symbols.append(listing.get_text())
     print('hello')
     return mc.set("top_US", US_symbols)
-
-sched.start()
