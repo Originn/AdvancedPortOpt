@@ -757,7 +757,11 @@ def result_alloc():
 def thread_status():
     userId = session['user_id']
     global_dict = mc.get("global_dict")
-    return jsonify(dict(status=('finished' if (global_dict[int(userId)]['finished'] == 'True') else 'running')))
+    time.sleep(3)
+    if (global_dict[int(userId)]['finished'] == 'True'):
+        return jsonify(dict(status=('finished' if (global_dict[int(userId)]['finished'] == 'True') else 'running')))
+    else:
+        return redirect("/status")
 
 @app.route("/allocation", methods=["POST"])
 @login_required
