@@ -727,11 +727,13 @@ def result():
         del global_dict
     except:
         try:
+            t1.join()
             return_error = str(global_dict[int(userId)]['error'])
             flash(return_error)
             return redirect("/build")
             del global_dict
         except:
+            t1.join()
             print('erorr')
             return redirect("/build")
             del global_dict
