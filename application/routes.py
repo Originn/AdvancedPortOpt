@@ -20,13 +20,11 @@ import numpy as np
 import pypfopt
 from pypfopt import risk_models, DiscreteAllocation, objective_functions, EfficientSemivariance, efficient_frontier, EfficientFrontier, HRPOpt, EfficientCVaR
 from pypfopt import EfficientFrontier
-from multiprocessing import Process
 from pandas_datareader import data
 import kthread
+from memory_profiler import profile
 
-global t1
-global t2
-
+#fp=open('memory_profiler.log','w+')
 yf.pdr_override()
 # Ensure responses aren't cached
 @app.after_request
@@ -391,8 +389,8 @@ def expected_returns():
 
 @app.route("/build",methods=["GET", "POST"])
 @login_required
+#@profile(stream=fp)
 def build():
-    #thread_pool = ThreadPoolExecutor(max_workers=4)
     if request.method == "POST":
         global_dict = {}
         userId = session['user_id']
@@ -667,7 +665,6 @@ def build():
             del global_dict[int(userId)]
             t1.terminate()
             return
-        global t1
         t1 = kthread.KThread(target=operation, args=[global_dict, session])
         t1.start()
 
@@ -690,11 +687,14 @@ def build():
                     t2.terminate()
                     return
         #global nasdaq_exchange_info
-        global t2
         t2 = kthread.KThread(target=enter_sql_data, args=[nasdaq_exchange_info, tickers])
         t2.start()
         return render_template("loading.html")
     else:
+        try:
+            mc.delete("user_dict")
+        except:
+            pass
         userId = session['user_id']
         cached_symbols = mc.get(str(userId) + "_symbols") if mc.get(str(userId) + "_symbols") else ''
         start_cached = mc.get(str(userId)+'start_date') if mc.get(str(userId)+'start_date') else 0
@@ -710,10 +710,10 @@ def build():
 
 @app.route('/result')
 @login_required
+#@profile(stream=fp)
 def result():
     user_dict = mc.get("user_dict")
     userId = session['user_id']
-    mc.delete("user_dict")
     try:
         return render_template("built.html", num_small=user_dict['num_small'], plot_json_weights_min_vol_long=user_dict['plot_json_weights_min_vol_long'], av_min_vol_long=user_dict['av_min_vol_long'], leftover_min_vol_long=user_dict['leftover_min_vol_long'], alloc_min_vol_long = user_dict['alloc_min_vol_long'], plot_json_dist_min_vol_long=user_dict['plot_json_dist_min_vol_long'], av = user_dict['av'], leftover_min_vol_long_short=user_dict['leftover_min_vol_long_short'], alloc_min_vol_long_short=user_dict['alloc_min_vol_long_short'], ret=user_dict['ret'],gamma=user_dict['gamma'],volatility=user_dict['volatility'], perf_L2=user_dict['perf_L2'], perf_semi_v=user_dict['perf_semi_v'], alloc_L2=user_dict['alloc_L2'], alloc_semi_v=user_dict['alloc_semi_v'], plot_json_graph=user_dict['plot_json_graph'], plot_json_Ledoit_Wolf=user_dict['plot_json_Ledoit_Wolf'], plot_json_weight_min_vol_long_short=user_dict['plot_json_weight_min_vol_long_short'], plot_json_L2_weights=user_dict['plot_json_L2_weights'], plot_json_L2_port = user_dict['plot_json_L2_port'], plot_json_semi_v = user_dict['plot_json_semi_v'], leftover_L2=user_dict['leftover_L2'], leftover_semi_v=user_dict['leftover_semi_v'],listofna=(', '.join(user_dict['listofna'])), min_cvar_rtn = user_dict['target_CVaR_exp_rtn'], min_cvar_risk = user_dict['target_CVaR_cond_val_risk'], var = user_dict['var'], cvar = user_dict['cvar'], plot_json_cvar=user_dict['plot_json_cvar'], cvar_value=user_dict['cvar_value'], alloc_cvar = user_dict['alloc_cvar'], leftover_cvar = user_dict['leftover_cvar'])
     except:
@@ -731,6 +731,7 @@ mc.delete("user_dict")
 @login_required
 def result_alloc():
     try:
+        time.sleep(2)
         return redirect("/")
     except:
         try:
@@ -742,6 +743,7 @@ def result_alloc():
 
 @app.route('/status')
 @login_required
+#@profile(stream=fp)
 def thread_status():
     userId = session['user_id']
     user_dict = mc.get("user_dict")
@@ -755,18 +757,17 @@ def thread_status():
 @login_required
 def allocation():
     @copy_current_request_context
-    def start_allocation(global_dict, session):
-        userId = userId
-        global_dict[int(userId)]['finished'] = 'False'
-        alloc=session[request.form.get('form_name')]
+    def start_allocation(user_dict, session):
+        user_dict['finished'] = 'False'
+        alloc=user_dict[request.form.get('form_name')]
         for key, value in alloc.items():
             price=price_lookup(key)
             amount=value
-            availableCash=db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
+            availableCash=Users.query.filter_by(id=session["user_id"]).first().cash
             sharesPrice = price * amount
             if sharesPrice > availableCash:
-                global_dict[int(userId)]['error'] = "Not enough money to buy:" + str(key)
-                global_dict[int(userId)]['finished'] = 'True'
+                user_dict['error'] = "Not enough money to buy:" + str(key)
+                user_dict['finished'] = 'True'
                 return
             else:
                 if ".L" in key:
@@ -792,8 +793,13 @@ def allocation():
                 db.session.add(new_record)
                 Users.query.filter_by(id=session["user_id"]).update({'cash':availableCash-(amount*price)})
         db.session.commit()
-        global_dict[int(userId)]['finished'] = 'True'
-    Thread(target=start_allocation, args=[global_dict, session], name=str(userId)+'_allocation_thread').start()
+        user_dict['finished'] = 'True'
+        t3.terminate()
+        mc.delete("user_dict")
+    user_dict = mc.get("user_dict")
+    userId = session['user_id']
+    t3 = kthread.KThread(target=start_allocation, args=[user_dict, session], name=str(userId)+'_allocation_thread')
+    t3.start()
     return render_template("loading_alloc.html")
 
 @app.route("/sell_all", methods=["GET", "POST"])
