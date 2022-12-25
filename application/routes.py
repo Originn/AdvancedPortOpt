@@ -22,10 +22,11 @@ from pypfopt import risk_models, DiscreteAllocation, objective_functions, Effici
 from pypfopt import EfficientFrontier
 from multiprocessing import Process
 from pandas_datareader import data
-from threading import Thread
+import kthread
 
-t1 = Thread()
-t2 = Thread()
+global t1
+global t2
+
 yf.pdr_override()
 # Ensure responses aren't cached
 @app.after_request
@@ -45,7 +46,6 @@ passw = os.environ.get('MEMCACHIER_PASSWORD', '')
 
 mc = bmemcached.Client(servers, username=user, password=passw)
 mc.enable_retry_delay(True)
-
 nasdaq_exchange_info_dict=mc.get("nasdaq_exchange_info_dict")
 nasdaq_exchange_info = mc.get("nasdaq_exchange_info")
 top_50_crypto=mc.get("top_50_crypto")
@@ -408,12 +408,12 @@ def build():
             if contains_multiple_words(symbols) == False:
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = "The app purpose is to optimize a portfolio given a list of stocks. Please enter a list of stocks seperated by a new row."
-                mc.set("global_dict", global_dict)
+                mc.set("user_dict", global_dict[int(userId)])
                 return
             if float(request.form.get("funds")) <= 0 or float(request.form.get("funds")) == " ":
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = "Amount need to be a positive number"
-                mc.set("global_dict", global_dict)
+                mc.set("user_dict", global_dict[int(userId)])
                 return
             Build(session["user_id"], request.form.get("symbols").upper(), request.form.get("start"), request.form.get("end"), request.form.get("funds"), request.form.get("short"), request.form.get("volatility"), request.form.get("gamma"), request.form.get("return"))
             db.session.commit()
@@ -427,13 +427,13 @@ def build():
                 except IndexError:
                     global_dict[int(userId)]['finished'] = 'True'
                     global_dict[int(userId)]['error'] = "Please enter valid stocks from Yahoo Finance."
-                    mc.set("global_dict", global_dict)
+                    mc.set("user_dict", global_dict[int(userId)])
                     return
                 df = df.loc[:,df.iloc[-2,:].notna()]
             except ValueError:
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = "Please enter a valid symbols (taken from Yahoo Finance)"
-                mc.set("global_dict", global_dict)
+                mc.set("user_dict", global_dict[int(userId)])
                 return
 
             prices = df.copy()
@@ -442,38 +442,14 @@ def build():
             fig.update_layout(width=1350, height=900, title_text = 'Price Graph', title_x = 0.5)
             global_dict[int(userId)]['plot_json_graph'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
 
-            exp_cov = risk_models.exp_cov(prices, frequency=252)
 
-            #plotting the covariance matrix
-            heat = go.Heatmap(
-                z = risk_models.cov_to_corr(exp_cov),
-                x = exp_cov.columns.values,
-                y = exp_cov.columns.values,
-                zmin = 0, # Sets the lower bound of the color domain
-                zmax = 1,
-                xgap = 1, # Sets the horizontal gap (in pixels) between bricks
-                ygap = 1,
-                colorscale = 'RdBu'
-            )
-
-            title = 'Exponential covariance matrix'
-
-            layout = go.Layout(
-                title_text=title,
-                title_x=0.5,
-                width=500,
-                height=500,
-                xaxis_showgrid=False,
-                yaxis_showgrid=False,
-                yaxis_autorange='reversed'
-            )
-
-            fig=go.Figure(data=[heat], layout=layout)
-            global_dict[int(userId)]['plot_json_exp_cov'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
-
-
-
-            S = risk_models.CovarianceShrinkage(prices).ledoit_wolf()
+            try:
+                S = risk_models.CovarianceShrinkage(prices).ledoit_wolf()
+            except:
+                global_dict[int(userId)]['finished'] = 'True'
+                global_dict[int(userId)]['error'] = "Could not fix ledoit_wolf matrix. Please try a different risk model."
+                mc.set("user_dict", global_dict[int(userId)])
+                return
 
             heat = go.Heatmap(
                 z = risk_models.cov_to_corr(S),
@@ -528,13 +504,13 @@ def build():
                 except IndexError:
                     global_dict[int(userId)]['finished'] = 'True'
                     global_dict[int(userId)]['error'] = "There is an issue with Yahoo API please try again later"
-                    mc.set("global_dict", global_dict)
+                    mc.set("user_dict", global_dict[int(userId)])
                     return
                 # prices as of the day you are allocating
                 if float(request.form.get("funds")) < float(latest_prices.min()):
                     global_dict[int(userId)]['finished'] = 'True'
                     global_dict[int(userId)]['error'] = "Amount is not high enough to cover the lowest priced stock"
-                    mc.set("global_dict", global_dict)
+                    mc.set("user_dict", global_dict[int(userId)])
                     return
                 try:
                     da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
@@ -544,7 +520,7 @@ def build():
                     delisted= ", ".join(delisted)
                     global_dict[int(userId)]['finished'] = 'True'
                     global_dict[int(userId)]['error'] = "Can't get latest prices for the following stock/s, please remove to contiue :" + delisted
-                    mc.set("global_dict", global_dict)
+                    mc.set("user_dict", global_dict[int(userId)])
                     return
                 alloc, global_dict[int(userId)]['leftover_min_vol_long'] = da.lp_portfolio()
                 global_dict[int(userId)]['alloc_min_vol_long']=alloc
@@ -555,7 +531,7 @@ def build():
             except ValueError as e:
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = str(e)
-                mc.set("global_dict", global_dict)
+                mc.set("user_dict", global_dict[int(userId)])
                 return
 
             #using risk models optimized for the Efficient frontier to reduce to min volitility, good for crypto currencies ('long and short')
@@ -578,13 +554,13 @@ def build():
                     delisted= ", ".join(delisted)
                     global_dict[int(userId)]['finished'] = 'True'
                     global_dict[int(userId)]['error'] = "Can't get latest prices for the following stock/s, please remove to contiue :" + delisted
-                    mc.set("global_dict", global_dict)
+                    mc.set("user_dict", global_dict[int(userId)])
                     return
                 global_dict[int(userId)]['alloc_min_vol_long_short'], global_dict[int(userId)]['leftover_min_vol_long_short'] = da.lp_portfolio()
             except ValueError as e:
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = str(e)
-                mc.set("global_dict", global_dict)
+                mc.set("user_dict", global_dict[int(userId)])
                 return
 
             #Maximise return for a given risk, with L2 regularisation
@@ -609,7 +585,7 @@ def build():
             except Exception as e:
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = str(e)
-                mc.set("global_dict", global_dict)
+                mc.set("user_dict", global_dict[int(userId)])
                 return
 
 
@@ -631,7 +607,7 @@ def build():
             except ValueError as e:
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = str(e)
-                mc.set("global_dict", global_dict)
+                mc.set("user_dict", global_dict[int(userId)])
                 return
             global_dict[int(userId)]['perf_semi_v']=es.portfolio_performance()
             weights = es.clean_weights()
@@ -666,17 +642,18 @@ def build():
             except:
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = f"Please enter CVaR higher than {round(global_dict[int(userId)]['cvar']*100, 1)}%"
-                mc.set("global_dict", global_dict)
+                mc.set("user_dict", global_dict[int(userId)])
                 return
             weights = ec.clean_weights()
             da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
             global_dict[int(userId)]['alloc_cvar'], global_dict[int(userId)]['leftover_cvar'] = da.lp_portfolio()
             global_dict[int(userId)]['target_CVaR_exp_rtn'], global_dict[int(userId)]['target_CVaR_cond_val_risk'] = ec.portfolio_performance()
             global_dict[int(userId)]['finished'] = 'True'
-            mc.set("global_dict", global_dict)
+            mc.set("user_dict", global_dict[int(userId)])
+            t1.terminate()
             return
         global t1
-        t1 = Thread(target=operation, args=[global_dict, session])
+        t1 = kthread.KThread(target=operation, args=[global_dict, session])
         t1.start()
 
         @copy_current_request_context
@@ -695,10 +672,11 @@ def build():
                     db.session.add(new_stock)
                     db.session.commit()
                     nasdaq_exchange_info.extend([ticker_list])
+                    t2.terminate()
                     return
         #global nasdaq_exchange_info
         global t2
-        t2 = Thread(target=enter_sql_data, args=[nasdaq_exchange_info, tickers])
+        t2 = kthread.KThread(target=enter_sql_data, args=[nasdaq_exchange_info, tickers])
         t2.start()
         return render_template("loading.html")
     else:
@@ -718,27 +696,22 @@ def build():
 @app.route('/result')
 @login_required
 def result():
-    global t1
-    global t2
-    t1.join()
-    t2.join()
-    global_dict = mc.get("global_dict")
+    user_dict = mc.get("user_dict")
     userId = session['user_id']
-    global_dict[int(userId)]['finished'] = 'False'
+    mc.delete("user_dict")
     try:
-        return render_template("built.html", num_small=global_dict[int(userId)]['num_small'], plot_json_weights_min_vol_long=global_dict[int(userId)]['plot_json_weights_min_vol_long'], av_min_vol_long=global_dict[int(userId)]['av_min_vol_long'], leftover_min_vol_long=global_dict[int(userId)]['leftover_min_vol_long'], alloc_min_vol_long = global_dict[int(userId)]['alloc_min_vol_long'], plot_json_dist_min_vol_long=global_dict[int(userId)]['plot_json_dist_min_vol_long'], av = global_dict[int(userId)]['av'], leftover_min_vol_long_short=global_dict[int(userId)]['leftover_min_vol_long_short'], alloc_min_vol_long_short=global_dict[int(userId)]['alloc_min_vol_long_short'], ret=global_dict[int(userId)]['ret'],gamma=global_dict[int(userId)]['gamma'],volatility=global_dict[int(userId)]['volatility'], perf_L2=global_dict[int(userId)]['perf_L2'], perf_semi_v=global_dict[int(userId)]['perf_semi_v'], alloc_L2=global_dict[int(userId)]['alloc_L2'], alloc_semi_v=global_dict[int(userId)]['alloc_semi_v'], plot_json_graph=global_dict[int(userId)]['plot_json_graph'], plot_json_exp_cov=global_dict[int(userId)]['plot_json_exp_cov'], plot_json_Ledoit_Wolf=global_dict[int(userId)]['plot_json_Ledoit_Wolf'], plot_json_weight_min_vol_long_short=global_dict[int(userId)]['plot_json_weight_min_vol_long_short'], plot_json_L2_weights=global_dict[int(userId)]['plot_json_L2_weights'], plot_json_L2_port = global_dict[int(userId)]['plot_json_L2_port'], plot_json_semi_v = global_dict[int(userId)]['plot_json_semi_v'], leftover_L2=global_dict[int(userId)]['leftover_L2'], leftover_semi_v=global_dict[int(userId)]['leftover_semi_v'],listofna=(', '.join(global_dict[int(userId)]['listofna'])), min_cvar_rtn = global_dict[int(userId)]['target_CVaR_exp_rtn'], min_cvar_risk = global_dict[int(userId)]['target_CVaR_cond_val_risk'], var = global_dict[int(userId)]['var'], cvar = global_dict[int(userId)]['cvar'], plot_json_cvar=global_dict[int(userId)]['plot_json_cvar'], cvar_value=global_dict[int(userId)]['cvar_value'], alloc_cvar = global_dict[int(userId)]['alloc_cvar'], leftover_cvar = global_dict[int(userId)]['leftover_cvar'])
-        del global_dict
+        return render_template("built.html", num_small=user_dict['num_small'], plot_json_weights_min_vol_long=user_dict['plot_json_weights_min_vol_long'], av_min_vol_long=user_dict['av_min_vol_long'], leftover_min_vol_long=user_dict['leftover_min_vol_long'], alloc_min_vol_long = user_dict['alloc_min_vol_long'], plot_json_dist_min_vol_long=user_dict['plot_json_dist_min_vol_long'], av = user_dict['av'], leftover_min_vol_long_short=user_dict['leftover_min_vol_long_short'], alloc_min_vol_long_short=user_dict['alloc_min_vol_long_short'], ret=user_dict['ret'],gamma=user_dict['gamma'],volatility=user_dict['volatility'], perf_L2=user_dict['perf_L2'], perf_semi_v=user_dict['perf_semi_v'], alloc_L2=user_dict['alloc_L2'], alloc_semi_v=user_dict['alloc_semi_v'], plot_json_graph=user_dict['plot_json_graph'], plot_json_Ledoit_Wolf=user_dict['plot_json_Ledoit_Wolf'], plot_json_weight_min_vol_long_short=user_dict['plot_json_weight_min_vol_long_short'], plot_json_L2_weights=user_dict['plot_json_L2_weights'], plot_json_L2_port = user_dict['plot_json_L2_port'], plot_json_semi_v = user_dict['plot_json_semi_v'], leftover_L2=user_dict['leftover_L2'], leftover_semi_v=user_dict['leftover_semi_v'],listofna=(', '.join(user_dict['listofna'])), min_cvar_rtn = user_dict['target_CVaR_exp_rtn'], min_cvar_risk = user_dict['target_CVaR_cond_val_risk'], var = user_dict['var'], cvar = user_dict['cvar'], plot_json_cvar=user_dict['plot_json_cvar'], cvar_value=user_dict['cvar_value'], alloc_cvar = user_dict['alloc_cvar'], leftover_cvar = user_dict['leftover_cvar'])
     except:
         try:
-            return_error = str(global_dict[int(userId)]['error'])
+            return_error = str(user_dict['error'])
             flash(return_error)
             return redirect("/build")
-            del global_dict
+            mc.delete("user_dict")
         except:
             return redirect("/build")
-            del global_dict
+            mc.delete("user_dict")
 
-
+mc.delete("user_dict")
 @app.route('/result_alloc')
 @login_required
 def result_alloc():
@@ -746,7 +719,7 @@ def result_alloc():
         return redirect("/")
     except:
         try:
-            return_error = str(global_dict[int(userId)]['error'])
+            return_error = str(user_dict['error'])
             flash(return_error)
             return redirect("/build")
         except:
@@ -756,12 +729,12 @@ def result_alloc():
 @login_required
 def thread_status():
     userId = session['user_id']
-    global_dict = mc.get("global_dict")
+    user_dict = mc.get("user_dict")
     time.sleep(3)
-    if (global_dict[int(userId)]['finished'] == 'True'):
-        return jsonify(dict(status=('finished' if (global_dict[int(userId)]['finished'] == 'True') else 'running')))
+    if user_dict:
+        return jsonify(dict(status=('finished' if (user_dict['finished'] == 'True') else 'running')))
     else:
-        return redirect("/status")
+        return render_template('loading.html')
 
 @app.route("/allocation", methods=["POST"])
 @login_required
