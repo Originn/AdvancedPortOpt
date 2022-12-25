@@ -650,6 +650,8 @@ def build():
             global_dict[int(userId)]['target_CVaR_exp_rtn'], global_dict[int(userId)]['target_CVaR_cond_val_risk'] = ec.portfolio_performance()
             global_dict[int(userId)]['finished'] = 'True'
             mc.set("user_dict", global_dict[int(userId)])
+            del global_dict[int(userId)]
+            print(global_dict)
             t1.terminate()
             return
         global t1
