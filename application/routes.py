@@ -409,11 +409,13 @@ def build():
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = "The app purpose is to optimize a portfolio given a list of stocks. Please enter a list of stocks seperated by a new row."
                 mc.set("user_dict", global_dict[int(userId)])
+                del global_dict[int(userId)]
                 return
             if float(request.form.get("funds")) <= 0 or float(request.form.get("funds")) == " ":
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = "Amount need to be a positive number"
                 mc.set("user_dict", global_dict[int(userId)])
+                del global_dict[int(userId)]
                 return
             Build(session["user_id"], request.form.get("symbols").upper(), request.form.get("start"), request.form.get("end"), request.form.get("funds"), request.form.get("short"), request.form.get("volatility"), request.form.get("gamma"), request.form.get("return"))
             db.session.commit()
@@ -428,12 +430,14 @@ def build():
                     global_dict[int(userId)]['finished'] = 'True'
                     global_dict[int(userId)]['error'] = "Please enter valid stocks from Yahoo Finance."
                     mc.set("user_dict", global_dict[int(userId)])
+                    del global_dict[int(userId)]
                     return
                 df = df.loc[:,df.iloc[-2,:].notna()]
             except ValueError:
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = "Please enter a valid symbols (taken from Yahoo Finance)"
                 mc.set("user_dict", global_dict[int(userId)])
+                del global_dict[int(userId)]
                 return
 
             prices = df.copy()
@@ -449,6 +453,7 @@ def build():
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = "Could not fix ledoit_wolf matrix. Please try a different risk model."
                 mc.set("user_dict", global_dict[int(userId)])
+                del global_dict[int(userId)]
                 return
 
             heat = go.Heatmap(
@@ -505,12 +510,14 @@ def build():
                     global_dict[int(userId)]['finished'] = 'True'
                     global_dict[int(userId)]['error'] = "There is an issue with Yahoo API please try again later"
                     mc.set("user_dict", global_dict[int(userId)])
+                    del global_dict[int(userId)]
                     return
                 # prices as of the day you are allocating
                 if float(request.form.get("funds")) < float(latest_prices.min()):
                     global_dict[int(userId)]['finished'] = 'True'
                     global_dict[int(userId)]['error'] = "Amount is not high enough to cover the lowest priced stock"
                     mc.set("user_dict", global_dict[int(userId)])
+                    del global_dict[int(userId)]
                     return
                 try:
                     da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
@@ -521,6 +528,7 @@ def build():
                     global_dict[int(userId)]['finished'] = 'True'
                     global_dict[int(userId)]['error'] = "Can't get latest prices for the following stock/s, please remove to contiue :" + delisted
                     mc.set("user_dict", global_dict[int(userId)])
+                    del global_dict[int(userId)]
                     return
                 alloc, global_dict[int(userId)]['leftover_min_vol_long'] = da.lp_portfolio()
                 global_dict[int(userId)]['alloc_min_vol_long']=alloc
@@ -532,6 +540,7 @@ def build():
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = str(e)
                 mc.set("user_dict", global_dict[int(userId)])
+                del global_dict[int(userId)]
                 return
 
             #using risk models optimized for the Efficient frontier to reduce to min volitility, good for crypto currencies ('long and short')
@@ -555,12 +564,14 @@ def build():
                     global_dict[int(userId)]['finished'] = 'True'
                     global_dict[int(userId)]['error'] = "Can't get latest prices for the following stock/s, please remove to contiue :" + delisted
                     mc.set("user_dict", global_dict[int(userId)])
+                    del global_dict[int(userId)]
                     return
                 global_dict[int(userId)]['alloc_min_vol_long_short'], global_dict[int(userId)]['leftover_min_vol_long_short'] = da.lp_portfolio()
             except ValueError as e:
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = str(e)
                 mc.set("user_dict", global_dict[int(userId)])
+                del global_dict[int(userId)]
                 return
 
             #Maximise return for a given risk, with L2 regularisation
@@ -586,6 +597,7 @@ def build():
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = str(e)
                 mc.set("user_dict", global_dict[int(userId)])
+                del global_dict[int(userId)]
                 return
 
 
@@ -608,6 +620,7 @@ def build():
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = str(e)
                 mc.set("user_dict", global_dict[int(userId)])
+                del global_dict[int(userId)]
                 return
             global_dict[int(userId)]['perf_semi_v']=es.portfolio_performance()
             weights = es.clean_weights()
@@ -643,6 +656,7 @@ def build():
                 global_dict[int(userId)]['finished'] = 'True'
                 global_dict[int(userId)]['error'] = f"Please enter CVaR higher than {round(global_dict[int(userId)]['cvar']*100, 1)}%"
                 mc.set("user_dict", global_dict[int(userId)])
+                del global_dict[int(userId)]
                 return
             weights = ec.clean_weights()
             da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
@@ -651,7 +665,6 @@ def build():
             global_dict[int(userId)]['finished'] = 'True'
             mc.set("user_dict", global_dict[int(userId)])
             del global_dict[int(userId)]
-            print(global_dict)
             t1.terminate()
             return
         global t1
