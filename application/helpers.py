@@ -13,12 +13,13 @@ from requests import get
 from string import *
 from flask_script import Manager
 
+
 #sched = BackgroundScheduler()
 manager = Manager(app)
 #set memcache in Heroku
-servers = os.environ.get('MEMCACHIER_SERVERS', '').split(',')
-user = os.environ.get('MEMCACHIER_USERNAME', '')
-passw = os.environ.get('MEMCACHIER_PASSWORD', '')
+servers = os.environ.get('MEMCACHEDCLOUD_SERVERS', '').split(',')
+user = os.environ.get('MEMCACHEDCLOUD_USERNAME', '')
+passw = os.environ.get('MEMCACHEDCLOUD_PASSWORD', '')
 
 mc = bmemcached.Client(servers, username=user, password=passw)
 
@@ -221,5 +222,4 @@ def get_list_of_top_US():
         soup=BeautifulSoup(data, 'html.parser')
         for listing in soup.find_all('a', attrs={'class':'screener-link-primary'}):
             US_symbols.append(listing.get_text())
-    print('hello')
     return mc.set("top_US", US_symbols)

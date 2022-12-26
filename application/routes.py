@@ -1,6 +1,6 @@
 from flask import current_app as app
 from flask import render_template, g
-from application.helpers import login_required, price_lookup, clean_header, usd, GBPtoUSD, contains_multiple_words, lookup, gbp
+from application.helpers import login_required, price_lookup, clean_header, usd, GBPtoUSD, contains_multiple_words, lookup, gbp, mc
 from werkzeug.exceptions import default_exceptions, HTTPException, InternalServerError
 from flask import Flask, flash, redirect, render_template, request, session, url_for, copy_current_request_context, jsonify
 from flask_sqlalchemy import SQLAlchemy
@@ -38,12 +38,7 @@ def after_request(response):
 
 pd.set_option('display.precision', 7)
 app.jinja_env.filters["usd"] = usd
-servers = os.environ.get('MEMCACHIER_SERVERS', '').split(',')
-user = os.environ.get('MEMCACHIER_USERNAME', '')
-passw = os.environ.get('MEMCACHIER_PASSWORD', '')
 
-mc = bmemcached.Client(servers, username=user, password=passw)
-mc.enable_retry_delay(True)
 nasdaq_exchange_info_dict=mc.get("nasdaq_exchange_info_dict")
 nasdaq_exchange_info = mc.get("nasdaq_exchange_info")
 top_50_crypto=mc.get("top_50_crypto")
@@ -51,6 +46,7 @@ top_world_stocks = mc.get("top_world")
 top_US_stocks= mc.get("top_US")
 top_div = mc.get("top_div")
 win_loss_trend = mc.get("win_loss_trend")
+
 users_stocks = [[sn, s] for sn, s in db.session.query(Stocks.shortname, Stocks.symbol)]
 nasdaq_exchange_info.extend(users_stocks)
 

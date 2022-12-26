@@ -13,9 +13,10 @@ def init_app():
     app.config.from_object('config.Config')
     assets = Environment()
     assets.init_app(app)
-    cache_servers = os.environ.get('MEMCACHIER_SERVERS')
-    cache_user = os.environ.get('MEMCACHIER_USERNAME')
-    cache_pass = os.environ.get('MEMCACHIER_PASSWORD')
+    
+    cache_servers = os.environ.get('MEMCACHEDCLOUD_SERVERS')
+    cache_user = os.environ.get('MEMCACHEDCLOUD_USERNAME')
+    cache_pass = os.environ.get('MEMCACHEDCLOUD_PASSWORD')
     app.config.update(
         SESSION_TYPE = 'memcached',
         SESSION_MEMCACHED = pylibmc.Client(cache_servers.split(','), binary=True,
