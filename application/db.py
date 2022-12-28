@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy(app)
 
+
 class Records(db.Model):
     symbol=db.Column(db.Text)
     number_of_shares=db.Column(db.Integer)

@@ -12,7 +12,6 @@ import plotly.express as px
 from sqlalchemy import func, cast, Date, desc
 import yfinance as yf
 from datetime import datetime
-from flask_session import Session
 from application.db import db, Records, Users, History, Build, Test, Stocks
 import random
 import yfinance.shared as shared
@@ -648,7 +647,7 @@ def build():
                 ec.efficient_risk(target_cvar=float(request.form.get("cvar"))/100)
             except:
                 global_dict[int(userId)]['finished'] = 'True'
-                global_dict[int(userId)]['error'] = f"Please enter CVaR higher than {round(global_dict[int(userId)]['cvar']*100, 1)}%"
+                global_dict[int(userId)]['error'] = f"Please enter CVaR higher than {round(global_dict[int(userId)]['cvar']*(-100), 1)}%"
                 mc.set("user_dict", global_dict[int(userId)])
                 del global_dict[int(userId)]
                 return
@@ -743,7 +742,6 @@ def result_alloc():
 def thread_status():
     userId = session['user_id']
     user_dict = mc.get("user_dict")
-    time.sleep(3)
     if user_dict:
         return jsonify(dict(status=('finished' if (user_dict['finished'] == 'True') else 'running')))
     else:

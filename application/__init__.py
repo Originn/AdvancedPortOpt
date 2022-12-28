@@ -3,9 +3,7 @@ from flask_assets import Environment
 import os
 import pylibmc
 from flask_session import Session
-
-
-
+import redis
 
 def init_app():
     """Construct core Flask application."""
@@ -13,29 +11,13 @@ def init_app():
     app.config.from_object('config.Config')
     assets = Environment()
     assets.init_app(app)
-    
-    cache_servers = os.environ.get('MEMCACHEDCLOUD_SERVERS')
-    cache_user = os.environ.get('MEMCACHEDCLOUD_USERNAME')
-    cache_pass = os.environ.get('MEMCACHEDCLOUD_PASSWORD')
+
+    cache_servers = os.environ.get('MEMCACHIER_SERVERS')
+    cache_user = os.environ.get('MEMCACHIER_USERNAME')
+    cache_pass = os.environ.get('MEMCACHIER_PASSWORD')
     app.config.update(
-        SESSION_TYPE = 'memcached',
-        SESSION_MEMCACHED = pylibmc.Client(cache_servers.split(','), binary=True,
-                           username=cache_user, password=cache_pass, behaviors={
-                                    # Faster IO
-                                    'tcp_nodelay': True,
-                                    # Keep connection alive
-                                    'tcp_keepalive': True,
-                                    # Timeout for set/get requests
-                                    'connect_timeout': 2000, # ms
-                                    'send_timeout': 750 * 1000, # us
-                                    'receive_timeout': 750 * 1000, # us
-                                    '_poll_timeout': 2000, # ms
-                                    # Better failover
-                                    'ketama': True,
-                                    'remove_failed': 1,
-                                    'retry_timeout': 2,
-                                    'dead_timeout': 30,
-                               }))
+        SESSION_TYPE = 'redis',
+        SESSION_REDIS = redis.from_url(os.environ.get('REDIS_URL')))
     Session(app)
 
     with app.app_context():

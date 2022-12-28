@@ -28,7 +28,7 @@ def init_dashboard(server):
     try:
         user = session.get("user_name")
     except:
-        user = 'Random user'
+        user = ', failed to load profile'
     """Create a Plotly Dash dashboard."""
     try:
         history = db.session.query(History.symbol, History.cml_units, History.price, History.time, History.gain_loss, History.cml_cost, History.cash_flow, History.avg_price).filter_by(user_id=session["user_id"]).all()
@@ -245,6 +245,8 @@ def init_dashboard(server):
     def load_user_dash(input1):
         if session.get('user_name'):
             user = session.get('user_name')
+        else:
+            user = 'Stam'
         try:
             stocks = db.session.query(Records.symbol, func.sum(Records.number_of_shares).label('sumshares'), func.avg(Records.purchase_p).label('purchase_p')).filter_by(user_id=session["user_id"]).group_by(Records.symbol).all()
         except:
@@ -412,7 +414,6 @@ def init_dashboard(server):
             end_stocks = today+pd.DateOffset(1)
             start_stocks = all_transactions.time.min().date()
 
-            from multiprocessing import Process, Queue
             def get(tickers, all_transactions, enddate):
                 def data(ticker):
                     def premarket1(ticker):
@@ -421,7 +422,7 @@ def init_dashboard(server):
                             return pmarket
                         except:
                             return None
-                    df = web.get_data_yahoo(ticker, start=all_transactions[all_transactions['symbol']==ticker]['time'].min().date()-BDay(0), end=enddate)
+                    df = web.get_data_yahoo(ticker, start=all_transactions[all_transactions['symbol']==ticker]['time'].min().date()-BDay(1), end=enddate)
                     if str(today) not in str(df.reset_index().Date):
                         new_data = pd.DataFrame(df[-1:].values, index=[today], columns=df.columns)
                         df = pd.concat([df, new_data])
@@ -437,6 +438,7 @@ def init_dashboard(server):
                 return(pd.concat(datas, keys=tickers, names=['ticker', 'date']))
 
             all_data = get(all_tickers, all_transactions, end_stocks)
+            print(all_data)
             all_data = all_data[~all_data.index.duplicated(keep='first')]
             MEGA_DICT = {}
             min_date = min(stock['time'] for stock in history).strftime('%Y-%m-%d')
@@ -527,10 +529,16 @@ def init_dashboard(server):
             all_transactions_mod['date']= pd.to_datetime(all_transactions_mod['date'], format='%Y-%m-%d')
             all_transactions_mod = all_transactions_mod.groupby('date').agg({'cash_flow': 'sum'})
             plotlydf_portfval = pd.merge(plotlydf_portfval, all_transactions_mod, on='date', how='left')
-
+            plotlydf_portfval = plotlydf_portfval.drop_duplicates(subset=['date'], keep='first')
+            plotlydf_portfval = plotlydf_portfval.reset_index(drop=True)
+            #adding ptf_value_pctch_wo_purchases that will not cause division by zero
+            plotlydf_portfval = plotlydf_portfval.assign(ptf_value_pctch_wo_purchases = plotlydf_portfval['portf_value'])
             plotlydf_portfval['cash_flow'] = plotlydf_portfval['cash_flow'].fillna(0).cumsum()
             plotlydf_portfval['ptf_growth_wo_purchases'] = plotlydf_portfval['portf_value'] + plotlydf_portfval['cash_flow']
-            plotlydf_portfval['ptf_value_pctch_wo_purchases'] = (((plotlydf_portfval['ptf_growth_wo_purchases']/plotlydf_portfval['portf_value'])*100).diff()).round(2)
+            #only dividing when portf_value is not zero
+            mask = plotlydf_portfval['portf_value'] > 0
+            plotlydf_portfval.loc[mask, 'ptf_value_pctch_wo_purchases'] = (((plotlydf_portfval.loc[mask,'ptf_growth_wo_purchases']/plotlydf_portfval.loc[mask, 'portf_value'])*100)).round(2)
+            plotlydf_portfval['ptf_value_pctch_wo_purchases'] = plotlydf_portfval['ptf_value_pctch_wo_purchases'].fillna(0).diff()
 
 
             if math.isnan(plotlydf_portfval.iloc[-1]['sp500_growth']) == True:
