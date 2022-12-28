@@ -438,7 +438,6 @@ def init_dashboard(server):
                 return(pd.concat(datas, keys=tickers, names=['ticker', 'date']))
 
             all_data = get(all_tickers, all_transactions, end_stocks)
-            print(all_data)
             all_data = all_data[~all_data.index.duplicated(keep='first')]
             MEGA_DICT = {}
             min_date = min(stock['time'] for stock in history).strftime('%Y-%m-%d')
@@ -538,7 +537,8 @@ def init_dashboard(server):
             #only dividing when portf_value is not zero
             mask = plotlydf_portfval['portf_value'] > 0
             plotlydf_portfval.loc[mask, 'ptf_value_pctch_wo_purchases'] = (((plotlydf_portfval.loc[mask,'ptf_growth_wo_purchases']/plotlydf_portfval.loc[mask, 'portf_value'])*100)).round(2)
-            plotlydf_portfval['ptf_value_pctch_wo_purchases'] = plotlydf_portfval['ptf_value_pctch_wo_purchases'].fillna(0).diff()
+            plotlydf_portfval['ptf_value_pctch_wo_purchases'] = plotlydf_portfval['ptf_value_pctch_wo_purchases'].fillna(0)
+            print(plotlydf_portfval)
 
 
             if math.isnan(plotlydf_portfval.iloc[-1]['sp500_growth']) == True:
