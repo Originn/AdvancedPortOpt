@@ -21,9 +21,7 @@ from pypfopt import risk_models, DiscreteAllocation, objective_functions, Effici
 from pypfopt import EfficientFrontier
 from pandas_datareader import data
 import kthread
-from memory_profiler import profile
 
-#fp=open('memory_profiler.log','w+')
 yf.pdr_override()
 # Ensure responses aren't cached
 @app.after_request
