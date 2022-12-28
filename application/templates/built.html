@@ -147,6 +147,11 @@
     graph = {{ plot_json_cvar | safe }};
     Plotly.plot('plotly-timeseries9', graph, {});
     </script>
+    <div id="plotly-timeseries10"></div>
+    <script>
+    graph = {{ pie_json_cvar | safe }};
+    Plotly.plot('plotly-timeseries10', graph, {});
+    </script>
     <p>VaR: {{ "%.2f" | format(var*100) }}%</p>
     <p>CVaR: {{ "%.2f" | format(cvar*100) }}%</p>
     <p>This value of the CVaR means that our average loss on the worst 5% of days will be {{ "%.2f" | format(cvar*100) }}%</p>
