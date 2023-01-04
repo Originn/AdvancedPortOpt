@@ -22,10 +22,8 @@ nav .navbar-brand .green
     color: #2e944b;
 }
 
-@media (max-width: 767px) {
-  body {
-    width: 100%;
-  }
+body {
+  width: 100%;
 }
 
 @media (max-width: 767px) {
