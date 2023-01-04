@@ -1148,7 +1148,21 @@ def test():
 
                 trace = go.Scatter(x=x, y=y, name=layout["title"]["text"])
                 fig.add_trace(trace, row=1, col=1)
-                fig.update_layout(yaxis_title="Portfolio value",width=1350, height=len(plot_portfolio_performance_objects) * 625, title_text = 'Portfolio Performance', title_x = 0.5)
+            fig.update_layout(yaxis_title="Portfolio value",width=1350, height=len(plot_portfolio_performance_objects) * 625, title_text = 'Portfolio Performance', title_x = 0.5,
+                            shapes=[
+                                    {
+                                        'type': 'line',
+                                        'x0': 0,
+                                        'y0': 10000,
+                                        'x1': 1,
+                                        'y1': 10000,
+                                        'xref': 'paper',
+                                        'line': {
+                                            'color': 'red',
+                                            'dash': 'dash',
+                                        },
+                                    },
+                                ])
             merged_graphs=json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
             results.update({"merged_graphs": merged_graphs})
         return render_template("test_result.html",results=results)
