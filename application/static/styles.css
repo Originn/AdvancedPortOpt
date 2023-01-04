@@ -29,6 +29,7 @@ body {
 @media (max-width: 767px) {
   main {
     width: 100%;
+    float: left;
   }
 }
 
