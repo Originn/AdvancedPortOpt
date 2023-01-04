@@ -12,8 +12,8 @@ with portfolio diversification.
 
 The webapp combine the two powerful libraries with a demo account for testing purposes. The build webpage is where the list of stocks should be input into. The optimal number is between 30 - 50 stocks. UK listed stocks are converted from pounds to dollars using an [API](https://api.exchangerate-api.com/v4/latest/USD).
 
+Testing past performances and comparing models is now available.
+
 Passwords are encrypted in a secure database.
 
 I hope you will enjoy the app and find it useful!
-
-known issues: Testing of past performances feature should be improved.
