@@ -22,6 +22,12 @@ nav .navbar-brand .green
     color: #2e944b;
 }
 
+@media (max-width: 767px) {
+  nav {
+    width: 100%;
+  }
+}
+
 main .form-control
 {
     /* Center form controls */
