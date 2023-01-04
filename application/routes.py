@@ -9,7 +9,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
-from sqlalchemy import func, cast, Date, desc
+from sqlalchemy import func, cast, Date, desc, null
 import yfinance as yf
 from datetime import datetime
 from application.db import db, Records, Users, History, Build, Test, Stocks
@@ -21,6 +21,9 @@ from pypfopt import risk_models, DiscreteAllocation, objective_functions, Effici
 from pypfopt import EfficientFrontier
 from pandas_datareader import data
 import kthread
+from datetime import datetime, timedelta
+from pandas.tseries.offsets import Day
+import plotly.subplots as subplots
 
 yf.pdr_override()
 # Ensure responses aren't cached
@@ -653,6 +656,7 @@ def build():
             da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=float(request.form.get("funds")))
             alloc, global_dict[int(userId)]['leftover_cvar'] = da.lp_portfolio()
             fig = px.pie(alloc.keys(), values=alloc.values(), names=alloc.keys())
+            fig.update_layout(title="allocation distribution")
             global_dict[int(userId)]['pie_json_cvar'] = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
             global_dict[int(userId)]['alloc_cvar'] = alloc
             global_dict[int(userId)]['target_CVaR_exp_rtn'], global_dict[int(userId)]['target_CVaR_cond_val_risk'] = ec.portfolio_performance()
@@ -828,75 +832,331 @@ def sell_all():
 @login_required
 def test():
     if request.method == "POST":
-        if request.form.get("data") == 'sp500':
-            nasdaq_exchange_info = pd.read_csv('s&p500.csv')
-            nasdaq_exchange_info = list(nasdaq_exchange_info['Symbol'])
-        elif request.form.get("data") == 'nasdaq':
-            nasdaq_exchange_info = pd.read_csv('nasdaqlisted.txt', sep = '|')
-            nasdaq_exchange_info = list(nasdaq_exchange_info['Symbol'])
-        else:
-            nasdaq_exchange_info = pd.read_csv('otherlisted.txt', sep = '|')
-            nasdaq_exchange_info = list(nasdaq_exchange_info['NASDAQ Symbol'])
-        i=0
-        for i in range(4):
-            method='semi-variance'
-            selected=random.sample(nasdaq_exchange_info, int(request.form.get("random")))
+        symbols = request.form.get("symbols")
+        symbols = list(set(symbols.split()))
+        try:
+            df = yf.download(symbols, start=request.form.get("start"), end=request.form.get("end"), auto_adjust = False, prepost = False, threads = True, proxy = None)["Adj Close"].dropna(axis=1, how='all').sort_values('Date')
+            failed=(list(shared._ERRORS.keys()))
+            df = df.replace(0, np.nan)
             try:
-                df = yf.download(selected, start=request.form.get("start"), end=request.form.get("end"), auto_adjust = False, prepost = False, threads = True, proxy = None)["Adj Close"].dropna(axis=1, how='all').sort_values('Date')
-                #another download to check the time from last download to today in order to check if the target was reached in any of the days
-                dftest=yf.download(selected, start=request.form.get("end"), end=datetime.today().strftime('%Y-%m-%d'), auto_adjust = False, prepost = False, threads = True, proxy = None)["Adj Close"].dropna(axis=1, how='all').sort_values('Date')
-                failed=(list(shared._ERRORS.keys()))
-                df = df.replace(0, np.nan)
+                listofna=df.columns[df.isna().iloc[-2]].tolist()+failed
+            except IndexError:
+                flash("Please enter valid stocks from Yahoo Finance.")
+                return redirect("/test")
+            df = df.loc[:,df.iloc[-2,:].notna()]
+        except ValueError:
+            flash("Please enter a valid symbols (taken from Yahoo Finance)")
+            return redirect("/test")
+        # Select the columns that end with '.L'
+        cols = df.columns[df.columns.str.endswith('.L')]
+        # Use numpy.where to get the indices of the elements that need to be converted
+        idx = np.where(df[cols].columns.str.endswith('.L'))[0]
+        # Use the indices to index into the dataframe and apply the conversion
+        df.iloc[:, idx] = df.iloc[:, idx] * GBPtoUSD()
+        # Subtract one year from today's date
+        today = datetime.strptime(request.form.get("end"), '%Y-%m-%d')
+        one_year_ago = today - timedelta(days=365)
+        df = df.reset_index()
+        # Filter the df dataframe to only include rows with a 'Date' value that is greater than or equal to one_year_ago
+        future_prices = df[df['Date'] >= one_year_ago].set_index('Date')
+        # Assign the remaining rows in the df dataframe to the future_prices_df dataframe
+        prices = df[df['Date'] < one_year_ago].set_index('Date')
+        prices = prices.loc[:,prices.iloc[-2,:].notna()]
+        for col in prices:
+            if pd.isnull(prices[col].iloc[-1]):
+                if pd.notnull(prices[col].iloc[-2]):
+                    prices[col].iloc[-1] = prices[col].iloc[-2]
+                else:
+                    prices = prices.drop(col, axis=1)
+        selected_values = request.form.getlist('test_model')
+        results = {"models": selected_values}
+        for method in selected_values:
+            if method == "minimum volatility":
+                print(prices)
+                S = risk_models.CovarianceShrinkage(prices).ledoit_wolf()
+                ef = EfficientFrontier(None, S)
                 try:
-                    listofna=df.columns[df.isna().iloc[-2]].tolist()+failed
-                except IndexError:
-                    flash("Please enter valid stocks from Yahoo Finance.")
+                    ef.min_volatility()
+                    weights = ef.clean_weights()
+                except ValueError as e:
+                    error = str(e)
+                    flash(error)
                     return redirect("/test")
-                df = df.loc[:,df.iloc[-2,:].notna()]
-            except ValueError:
-                flash("Please enter a valid symbols (taken from Yahoo Finance)")
-                return redirect("/test")
-            prices = df.copy()
-            mu = pypfopt.expected_returns.capm_return(prices)
-            returns = pypfopt.expected_returns.returns_from_prices(prices)
-            returns = returns.dropna()
-            es = EfficientSemivariance(mu, returns)
-            try:
-                es.efficient_return(0.15)
-            except ValueError as e:
-                flash(str(e))
-                return redirect("/test")
-            perf2=es.portfolio_performance()
-            weights = es.clean_weights()
-            gamma=None
-            latest_prices2 = df.iloc[-1]  # prices as of the day you are allocating
-            da = DiscreteAllocation(weights, latest_prices2, total_portfolio_value=10000)
-            alloc2, leftover2 = da.lp_portfolio()
-            #create a df where we can test if the portfolio reached the desired yield.
-            dftest=dftest.loc[:, dftest.columns.isin(list(alloc2.keys()))]
-            #create a total value df where we can see the value of the portfolio on each day
-            df1 = dftest.dot(pd.Series(alloc2))+leftover2
-            max_profit_value=df1.max()-10000
-            totalprice=0
-            totalnewprice=0
-            #check what is the value of the stocks today
-            for key, value in alloc2.items():
-                price=latest_prices2[key]
-                sharesPrice = price * int(value)
-                todayprice = price_lookup(key)
-                totalnewprice += todayprice*int(value)
-                if ".L" in key:
-                    price=GBPtoUSD()*price
-                totalprice += sharesPrice
-            #what is thevalue of the portfolio today
-            profitloss=totalnewprice-totalprice+leftover2
-            new_test=Test(request.form.get("start"), request.form.get("end"), list(alloc2.keys()), profitloss, session["user_id"], profit_date, method, max_profit_value, target_profit, gamma)
-            db.session.add(new_test)
-            db.session.commit()
-            i += 1
-        return render_template("test1.html", listofna=listofna, profitloss=profitloss, alloc2=alloc2)
+                try:
+                    latest_prices = prices.iloc[-1]
+                except IndexError:
+                    error = "There is an issue with Yahoo API please try again later"
+                    flash(error)
+                    return redirect("/test")
+                # prices as of the day you are allocating
+                if 10000 < float(latest_prices.min()):
+                    error = "Amount is not high enough to cover the lowest priced stock"
+                    flash(error)
+                    return redirect("/test")
+                try:
+                    da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=10000)
+                except TypeError:
+                        delisted = prices.columns[df.iloc[-1].isnull()]
+                        delisted= ", ".join(delisted)
+                        error = "Can't get latest prices for the following stock/s, please remove to contiue :" + delisted
+                        flash(error)
+                        return redirect("/test")
+                alloc, leftover = da.lp_portfolio()
+                fig = px.pie(alloc.keys(), values=alloc.values(), names=alloc.keys())
+                fig.update_traces(textposition='inside')
+                fig.update_layout(title_text='Suggested Portfolio Allocation for min volatility (long)', title_x=0.5)
+                plot_json_dist_min_vol_long = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+                future_prices_min=future_prices.loc[:, future_prices.columns.isin(list(alloc.keys()))]
+                #create a total value df where we can see the value of the portfolio on each day
+                portfolio_performance = future_prices_min.dot(pd.Series(alloc))+leftover
+                fig = px.line(portfolio_performance, x=portfolio_performance.index, y=portfolio_performance)
+                #fig = fig.update_xaxes(rangeslider_visible=True)
+                fig.update_layout(yaxis_title="Portfolio value",width=1350, height=700, title_text = 'Minimun volatility', title_x = 0.5)
+                plot_portfolio_performance_min_vol = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+                max_profit_min_vol=round(portfolio_performance.max(), 2)
+                max_profit_pct_min_vol=round((portfolio_performance.max()-10000)/100, 2)
+                max_profit_value=portfolio_performance.max()-10000
+                profit_date = portfolio_performance.idxmax()
+                profit_date_min_vol=profit_date.strftime("%Y-%m-%d")
+                num_days_min_vol = (profit_date - portfolio_performance.index[0]).days
+                method = "minimum volatility"
+                end_date=request.form.get("end")
+                new_test=Test(request.form.get("start"), end_date, list(alloc.keys()), session["user_id"], profit_date, method, max_profit_value, null(), null(), num_days_min_vol)
+                db.session.add(new_test)
+                db.session.commit()
+                results.update({"plot_portfolio_performance_min_vol": plot_portfolio_performance_min_vol,
+                                "plot_json_dist_min_vol_long": plot_json_dist_min_vol_long,
+                                 "max_profit_pct_min_vol": max_profit_pct_min_vol,
+                                 "max_profit_min_vol": max_profit_min_vol,
+                                 "num_days_min_vol":num_days_min_vol,
+                                 "profit_date_min_vol": profit_date_min_vol,
+                                 "listofna": listofna})
+            if method == "mean variance":
+                try:
+                    mu = pypfopt.expected_returns.capm_return(prices)
+                    S = risk_models.CovarianceShrinkage(prices).ledoit_wolf()
+                    ef = EfficientFrontier(mu, S)
+                    ef.add_objective(objective_functions.L2_reg, gamma=(float(request.form.get("gamma"))))  # gamme is the tuning parameter
+                    ef.efficient_risk(float(request.form.get("volatility"))/100)
+                    weights = ef.clean_weights()
+                    #finding zero weights
+                    num_small = len([k for k in weights if weights[k] <= 1e-4])
+                    num_small_mean_var = str(f"{num_small}/{len(ef.tickers)} tickers have zero weight")
+                    port_perf_mean_var = ef.portfolio_performance()
+                except Exception as e:
+                    error = str(e)
+                    flash(error)
+                    return redirect("/test")
+                #if we want to buy the portfolio mentioned above
+                try:
+                    latest_prices = prices.iloc[-1]
+                except IndexError:
+                    error = "There is an issue with Yahoo API please try again later"
+                    flash(error)
+                    return redirect("/test")
+                # prices as of the day you are allocating
+                if 10000 < float(latest_prices.min()):
+                    error = "Amount is not high enough to cover the lowest priced stock"
+                    flash(error)
+                    return redirect("/test")
+                try:
+                    da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=10000)
+                except TypeError:
+                    delisted = prices.columns[df.iloc[-1].isnull()]
+                    delisted= ", ".join(delisted)
+                    error = "Can't get latest prices for the following stock/s, please remove to contiue :" + delisted
+                    flash(error)
+                    return redirect("/test")
+                alloc, leftover = da.lp_portfolio()
+                fig= px.pie(alloc.keys(), values=alloc.values(), names=alloc.keys())
+                fig.update_traces(textposition='inside')
+                fig.update_layout(width=500, height=500, uniformtext_minsize=12, font=dict(size=10), uniformtext_mode='hide', title_text='Suggested Portfolio Distribution using Capital Asset Pricing Model', title_x=0.5)
+                plot_json_dist_mean_var = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+                future_prices_mean=future_prices.loc[:, future_prices.columns.isin(list(alloc.keys()))]
+                #create a total value df where we can see the value of the portfolio on each day
+                portfolio_performance = future_prices_mean.dot(pd.Series(alloc))+leftover
+                fig = px.line(portfolio_performance, x=portfolio_performance.index, y=portfolio_performance)
+                #fig = fig.update_xaxes(rangeslider_visible=True)
+                fig.update_layout(yaxis_title="Portfolio value",width=1350, height=700, title_text = 'mean variance & L2', title_x = 0.5)
+                plot_portfolio_performance_mean_var = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+                max_profit_mean_var=round(portfolio_performance.max(), 2)
+                max_profit_pct_mean_var=round((portfolio_performance.max()-10000)/100, 2)
+                max_profit_value=portfolio_performance.max()-10000
+                profit_date = portfolio_performance.idxmax()
+                profit_date_mean_var=profit_date.strftime("%Y-%m-%d")
+                num_days_mean_var = (profit_date - portfolio_performance.index[0]).days
+                method = "mean variance"
+                end_date=request.form.get("end")
+                new_test=Test(request.form.get("start"), end_date, list(alloc.keys()), session["user_id"], profit_date, method, max_profit_value, null(), null(), num_days_mean_var)
+                db.session.add(new_test)
+                db.session.commit()
+                results.update({"num_small_mean_var": num_small_mean_var,
+                                "port_perf_mean_var": port_perf_mean_var,
+                                 "plot_json_dist_mean_var": plot_json_dist_mean_var,
+                                 "plot_portfolio_performance_mean_var": plot_portfolio_performance_mean_var,
+                                 "max_profit_mean_var":max_profit_mean_var,
+                                 "max_profit_pct_mean_var": max_profit_pct_mean_var,
+                                 "profit_date_mean_var": profit_date_mean_var,
+                                 "num_days_mean_var": num_days_mean_var})
+            if method == "semi-variance":
+                try:
+                    mu = pypfopt.expected_returns.capm_return(prices)
+                    returns = pypfopt.expected_returns.returns_from_prices(prices)
+                    returns = returns.dropna()
+                    es = EfficientSemivariance(mu, returns)
+                    try:
+                        es.efficient_return(float(request.form.get("return"))/100)
+                    except ValueError as e:
+                        error = str(e)
+                        flash(error)
+                        return redirect("/test")
+                    port_perf_semi_var=es.portfolio_performance()
+                    weights = es.clean_weights()
+                except IndexError as e:
+                    flash(e)
+                    return redirect("/test")
+                try:
+                    latest_prices = prices.iloc[-1]
+                except IndexError:
+                    error = "There is an issue with Yahoo API please try again later"
+                    flash(error)
+                    return redirect("/test")
+                # prices as of the day you are allocating
+                if 10000 < float(latest_prices.min()):
+                    error = "Amount is not high enough to cover the lowest priced stock"
+                    flash(error)
+                    return redirect("/test")
+                try:
+                    da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=10000)
+                except TypeError:
+                    delisted = prices.columns[df.iloc[-1].isnull()]
+                    delisted= ", ".join(delisted)
+                    error = "Can't get latest prices for the following stock/s, please remove to contiue :" + delisted
+                    flash(error)
+                    return redirect("/test")
+                alloc, leftover = da.lp_portfolio()
+                fig= px.pie(alloc.keys(), values=alloc.values(), names=alloc.keys())
+                fig.update_traces(textposition='inside')
+                fig.update_layout(width=500, height=500, uniformtext_minsize=12, font=dict(size=10), uniformtext_mode='hide', title_text='Suggested Portfolio Distribution using Capital Asset Pricing Model', title_x=0.5)
+                plot_json_dist_semi_var = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+                future_prices_semi=future_prices.loc[:, future_prices.columns.isin(list(alloc.keys()))]
+                #create a total value df where we can see the value of the portfolio on each day
+                portfolio_performance = future_prices_semi.dot(pd.Series(alloc))+leftover
+                fig = px.line(portfolio_performance, x=portfolio_performance.index, y=portfolio_performance)
+                #fig = fig.update_xaxes(rangeslider_visible=True)
+                fig.update_layout(yaxis_title="Portfolio value",width=1350, height=700, title_text = 'semi variance', title_x = 0.5)
+                plot_portfolio_performance_semi_var = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+                max_profit_semi_var=round(portfolio_performance.max(), 2)
+                max_profit_pct_semi_var=round((portfolio_performance.max()-10000)/100, 2)
+                max_profit_value=portfolio_performance.max()-10000
+                profit_date = portfolio_performance.idxmax()
+                profit_date_semi_var=profit_date.strftime("%Y-%m-%d")
+                num_days_semi_var = (profit_date - portfolio_performance.index[0]).days
+                method = "semi variance"
+                end_date=request.form.get("end")
+                new_test=Test(request.form.get("start"), end_date, list(alloc.keys()), session["user_id"], profit_date, method, max_profit_value, null(), null(), num_days_semi_var)
+                db.session.add(new_test)
+                db.session.commit()
+                results.update({"port_perf_semi_var": port_perf_semi_var,
+                                 "plot_json_dist_semi_var": plot_json_dist_semi_var,
+                                 "plot_portfolio_performance_semi_var": plot_portfolio_performance_semi_var,
+                                 "max_profit_semi_var":max_profit_semi_var,
+                                 "max_profit_pct_semi_var": max_profit_pct_semi_var,
+                                 "profit_date_semi_var": profit_date_semi_var,
+                                 "num_days_semi_var": num_days_semi_var})
+            if method == "CVaR":
+                mu = pypfopt.expected_returns.capm_return(prices)
+                returns =pypfopt.expected_returns.returns_from_prices(prices).dropna()
+                cvar_value=request.form.get("cvar")
+                ec = EfficientCVaR(mu, returns)
+                try:
+                    ec.efficient_risk(target_cvar=float(request.form.get("cvar"))/100)
+                except:
+                    error = f"Please enter CVaR higher than {round(global_dict[int(userId)]['cvar']*(-100), 1)}%"
+                    flash(error)
+                    return redirect("/test")
+                weights = ec.clean_weights()
+                try:
+                    latest_prices = prices.iloc[-1]
+                except IndexError:
+                    error = "There is an issue with Yahoo API please try again later"
+                    flash(error)
+                    return redirect("/test")
+                # prices as of the day you are allocating
+                if 10000 < float(latest_prices.min()):
+                    error = "Amount is not high enough to cover the lowest priced stock"
+                    flash(error)
+                    return redirect("/test")
+                try:
+                    da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=10000)
+                except TypeError:
+                    delisted = prices.columns[df.iloc[-1].isnull()]
+                    delisted= ", ".join(delisted)
+                    error = "Can't get latest prices for the following stock/s, please remove to contiue :" + delisted
+                    flash(error)
+                    return redirect("/test")
+                alloc, leftover = da.lp_portfolio()
+                fig= px.pie(alloc.keys(), values=alloc.values(), names=alloc.keys())
+                fig.update_traces(textposition='inside')
+                fig.update_layout(width=500, height=500, uniformtext_minsize=12, font=dict(size=10), uniformtext_mode='hide', title_text='Suggested Portfolio Distribution CVaR', title_x=0.5)
+                plot_json_dist_cvar = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+                future_prices_cvar=future_prices.loc[:, future_prices.columns.isin(list(alloc.keys()))]
+                #create a total value df where we can see the value of the portfolio on each day
+                portfolio_performance = future_prices_cvar.dot(pd.Series(alloc))+leftover
+                fig = px.line(portfolio_performance, x=portfolio_performance.index, y=portfolio_performance)
+                #fig = fig.update_xaxes(rangeslider_visible=True)
+                fig.update_layout(yaxis_title="Portfolio value",width=1350, height=700, title_text = 'CVaR', title_x = 0.5)
+                plot_portfolio_performance_cvar = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+                target_CVaR_exp_rtn, target_CVaR_cond_val_risk = ec.portfolio_performance()
+                max_profit_cvar=round(portfolio_performance.max(), 2)
+                max_profit_pct_cvar=round((portfolio_performance.max()-10000)/100, 2)
+                max_profit_value=portfolio_performance.max()-10000
+                profit_date = portfolio_performance.idxmax()
+                profit_date_cvar=profit_date.strftime("%Y-%m-%d")
+                num_days_cvar = (profit_date - portfolio_performance.index[0]).days
+                method = "CVaR"
+                end_date=request.form.get("end")
+                new_test=Test(request.form.get("start"), end_date, list(alloc.keys()), session["user_id"], profit_date, method, max_profit_value, null(), null(), num_days_cvar)
+                db.session.add(new_test)
+                db.session.commit()
+                results.update({"plot_json_dist_cvar": plot_json_dist_cvar,
+                                "plot_portfolio_performance_cvar": plot_portfolio_performance_cvar,
+                                "max_profit_cvar":max_profit_cvar,
+                                "max_profit_pct_cvar": max_profit_pct_cvar,
+                                "profit_date_cvar": profit_date_cvar,
+                                "num_days_cvar": num_days_cvar,
+                                "target_CVaR_exp_rtn": target_CVaR_exp_rtn,
+                                "target_CVaR_cond_val_risk": target_CVaR_cond_val_risk})
+        # Extract the objects with keys that start with "plot_portfolio_performance"
+        plot_portfolio_performance_objects = [value for key, value in results.items() if key.startswith("plot_portfolio_performance")]
+        # Check if there are 2 or more objects
+        if len(plot_portfolio_performance_objects) >= 2:
+            fig = subplots.make_subplots(rows=len(plot_portfolio_performance_objects), cols=1)
+            for i in range(len(plot_portfolio_performance_objects)):
+
+                # Parse the string into a JSON object
+                json_object = json.loads(plot_portfolio_performance_objects[i])
+                plot_name=json_object["layout"]["title"]["text"]
+
+                 # Get the data and layout from the px.line object
+                data = json_object["data"]
+                layout = json_object["layout"]
+
+                # Extract the x and y data from the data object
+                x = [point for point in data[0]["x"]]
+                y = [point for point in data[0]["y"]]
+
+                trace = go.Scatter(x=x, y=y, name=layout["title"]["text"])
+                fig.add_trace(trace, row=1, col=1)
+                fig.update_layout(yaxis_title="Portfolio value",width=1350, height=len(plot_portfolio_performance_objects) * 625, title_text = 'Portfolio Performance', title_x = 0.5)
+            merged_graphs=json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+            results.update({"merged_graphs": merged_graphs})
+        return render_template("test_result.html",results=results)
     else:
-        return render_template("test.html")
+        arr = np.array(nasdaq_exchange_info)
+        nasdaq_exchange_info_tickers = arr[:, 1]
+        nasdaq_exchange_info_tickers = nasdaq_exchange_info_tickers.tolist()
+        return render_template("test.html", nasdaq_exchange_info = nasdaq_exchange_info, nasdaq_exchange_info_tickers=nasdaq_exchange_info_tickers)
 
 
 @app.route("/dash")

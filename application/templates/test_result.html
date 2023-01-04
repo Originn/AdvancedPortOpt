@@ -1,0 +1,149 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    test_result
+{% endblock %}
+
+{% block main %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+<div class="mytabs">
+{% if results.profit_date_min_vol is defined %}
+  <input type="radio" id="min_vol" name="mytabs">
+  <label for="min_vol">Minimum volatility</label>
+  <div class="tab">
+    <div class="alert1">
+      <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span>
+      The following symbols have been removed due to low quality data: {{ listofna }}
+    </div>
+    <p>&nbsp;</p>
+    <a>On {{ results.profit_date_min_vol }} which is {{ results.num_days_min_vol }} days from the purchase date, the portfolio was at it's maximum price {{ results.max_profit_min_vol }}, which is {{ results.max_profit_pct_min_vol }}%</a>
+    <p>&nbsp;</p>
+    <div id="plotly-timeseries"></div>
+    <script>
+    var graph = {{ results.plot_json_dist_min_vol_long | safe }};
+    Plotly.plot('plotly-timeseries', graph, {});
+    </script>
+
+    <div align="center"; class="child"; id="plotly-timeseries1"></div>
+    <script>
+    graph = {{ results.plot_portfolio_performance_min_vol | safe }};
+    Plotly.plot('plotly-timeseries1', graph, {});
+    </script>
+  </div>
+{% endif %}
+
+{% if results.num_small_mean_var is defined %}
+  <input type="radio" id="Mean-variance" name="mytabs">
+  <label for="Mean-variance">L2 Regularisation & capm returns </label>
+  <div class="tab">
+    <p>&nbsp;</p>
+    <p>{{ results.num_small_mean_var }}</p>
+    <p>&nbsp;</p>
+    <p>Expected annual return: {{ "%.2f" | format(results.port_perf_mean_var[0]*100) }}%</p>
+    <p>Annual volatility: {{ "%.2f" | format(results.port_perf_mean_var[1]*100) }}%</p>
+    <p>Sharpe Ratio: {{ "%.2f" | format(results.port_perf_mean_var[2]) }}</p>
+    <p>&nbsp;</p>
+    <a>On {{ results.profit_date_mean_var }} which is {{ results.num_days_mean_var }} days from the purchase date, the portfolio was at it's maximum price {{ results.max_profit_mean_var }}, which is {{ results.max_profit_pct_mean_var }}%</a>
+    <p>&nbsp;</p>
+    <div id="plotly-timeseries3"></div>
+    <script>
+    graph = {{ results.plot_json_dist_mean_var | safe }};
+    Plotly.plot('plotly-timeseries3', graph, {});
+    </script>
+
+    <div align="center"; class="child"; id="plotly-timeseries4"></div>
+    <script>
+    graph = {{ results.plot_portfolio_performance_mean_var | safe }};
+    Plotly.plot('plotly-timeseries4', graph, {});
+    </script>
+  </div>
+{% endif %}
+
+{% if results.profit_date_semi_var is defined %}
+  <input type="radio" id="semi-variance" name="mytabs">
+  <label for="semi-variance">Semi-variance</label>
+  <div class="tab">
+    <p>&nbsp;</p>
+    <p>{{ results.num_small_semi_var }}</p>
+    <p>&nbsp;</p>
+    <p>Expected annual return: {{ "%.2f" | format(results.port_perf_semi_var[0]*100) }}%</p>
+    <p>Annual volatility: {{ "%.2f" | format(results.port_perf_semi_var[1]*100) }}%</p>
+    <p>Sharpe Ratio: {{ "%.2f" | format(results.port_perf_semi_var[2]) }}</p>
+    <p>&nbsp;</p>
+    <a>On {{ results.profit_date_semi_var }} which is {{ results.num_days_semi_var }} days from the purchase date, the portfolio was at it's maximum price {{ results.max_profit_semi_var }}, which is {{ results.max_profit_pct_semi_var }}%</a>
+    <p>&nbsp;</p>
+    <div id="plotly-timeseries8"></div>
+    <script>
+    graph = {{ results.plot_json_dist_semi_var | safe }};
+    Plotly.plot('plotly-timeseries8', graph, {});
+    </script>
+
+    <div align="center"; class="child"; id="plotly-timeseries9"></div>
+    <script>
+    graph = {{ results.plot_portfolio_performance_semi_var | safe }};
+    Plotly.plot('plotly-timeseries9', graph, {});
+    </script>
+  </div>
+{% endif %}
+
+{% if results.profit_date_cvar is defined %}
+  <input type="radio" id="cvar" name="mytabs">
+  <label for="cvar">CVaR</label>
+  <div class="tab">
+    <h2>CVaR</h2>
+    <a>On {{ results.profit_date_cvar }} which is {{ results.num_days_cvar }} days from the purchase date, the portfolio was at it's maximum price {{ results.max_profit_cvar }}, which is {{ results.max_profit_pct_cvar }}%</a>
+    <div id="plotly-timeseries10"></div>
+    <script>
+    graph = {{ results.plot_json_dist_cvar | safe }};
+    Plotly.plot('plotly-timeseries10', graph, {});
+    </script>
+    <div align="center"; class="child"; id="plotly-timeseries11"></div>
+    <script>
+    graph = {{ results.plot_portfolio_performance_cvar | safe }};
+    Plotly.plot('plotly-timeseries11', graph, {});
+    </script>
+    <p>As minimum CVaR value was set to {{ cvar_value }}% the following portfolio is suggested:</p>
+    <p>Expected annual return: {{ "%.2f" | format(results.target_CVaR_exp_rtn*100) }}%</p>
+    <p>Conditional Value at Risk {{ "%.2f" | format(results.target_CVaR_cond_val_risk*100) }}%</p>
+  </div>
+{% endif %}
+
+{% if results.merged_graphs is defined %}
+<input type="radio" id="graphs" name="mytabs" checked="checked">
+<label for="graphs">Compare Graphs</label>
+<div class="tab">
+  <div align="center"; class="child"; id="plotly-timeseries12"></div>
+  <script>
+  var graph = {{ results.merged_graphs | safe }};
+  Plotly.plot('plotly-timeseries12', graph, {});
+  </script>
+</div>
+{% endif %}
+
+<script>
+  var input1 = document.querySelector('#min_vol');
+  var input2 = document.querySelector('#Mean-variance');
+  var input3 = document.querySelector('#semi-variance');
+  var input4 = document.querySelector('#cvar');
+  var input5 = document.querySelector('#graphs');
+
+  if (input1 !== null && input2 !== null && input3 !== null && input4 !== null) {
+    input1.setAttribute('checked', 'checked');
+  } else if (input2 !== null && input3 !== null) {
+    input2.setAttribute('checked', 'checked');
+  } else if (input1 !== null && input3 !== null) {
+    input1.setAttribute('checked', 'checked');
+  } else if (input1 !== null && input2 !== null) {
+    input1.setAttribute('checked', 'checked');
+  } else if (input1 !== null) {
+    input1.setAttribute('checked', 'checked');
+  } else if (input2 !== null) {
+    input2.setAttribute('checked', 'checked');
+  } else if (input3 !== null) {
+    input3.setAttribute('checked', 'checked');
+  } else if (input4 !== null) {
+    input4.setAttribute('checked', 'checked');
+  }
+</script>
+{% endblock %}

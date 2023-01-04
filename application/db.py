@@ -91,25 +91,25 @@ class Test(db.Model):
     start_date=db.Column(db.Date)
     end_date=db.Column(db.Date)
     symbols=db.Column(db.String)
-    profit_loss=db.Column(db.Integer)
     user_id=db.Column(db.Integer, primary_key=True)
     profit_date=db.Column(db.Date, default=None)
     method=db.Column(db.String)
     max_profit_value=db.Column(db.Integer)
     target_profit=db.Column(db.Integer, default=None)
     gamma=db.Column(db.Float)
+    num_days_to_max_profit=db.Column(db.Integer, default=None)
 
-    def __init__(self, start_date, end_date, symbols, profit_loss, user_id, profit_date, method, max_profit_value, target_profit, gamma):
+    def __init__(self, start_date, end_date, symbols, user_id, profit_date, method, max_profit_value, target_profit, gamma, num_days_to_max_profit):
         self.user_id = user_id
         self.start_date = start_date
         self.end_date = end_date
         self.symbols = symbols
-        self.profit_loss = profit_loss
         self.profit_date=profit_date
         self.method=method
         self.max_profit_value=max_profit_value
         self.target_profit=target_profit
         self.gamma=gamma
+        self.num_days_to_max_profit=num_days_to_max_profit
 
 class Stocks(db.Model):
     symbol = db.Column(db.Text, primary_key=True, unique=True)

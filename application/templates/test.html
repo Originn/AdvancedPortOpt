@@ -5,33 +5,65 @@
 {% endblock %}
 
 {% block main %}
-<form action="/test" method="post">
-<h3>Please enter the time range to pull data from</h3>
-        <div class="form-group">
-            <input autocomplete="off" value="2020-04-18" class="form-control" name="start" placeholder="start" type="date">
-            <input autocomplete="off" id="today" value="2021-04-18"class="form-control" name="end" placeholder="end" type="date">
-        </div>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-select@1.13.9/dist/css/bootstrap-select.min.css">
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap-select@1.13.9/dist/js/bootstrap-select.min.js"></script>
 
-<h3>Please select the stock database to choose from</h3>
+<form action="/test" method="post">
+
+<h3>Please enter the stocks you want to test or choose random stocks</h3>
+<div class="autocomplete" style="width:300px;">
+  <input id="myInput" type="text" name="stock" placeholder="Company Name">
+</div>
 <div class="form-group">
-<select name="data">
-    <option value="sp500">S&P500</option>
-    <option value="nasdaq">NASDAQ</option>
-    <option value="other">OTHER</option>
-</select>
+    <textarea rows=10 id="myTxt" class="form-control" name="symbols" placeholder="symbols" type="text">{{ cached_symbols }}</textarea>
+    <div style="float: right; width: calc(50% - 5px); height: 200px;">
+      <h5> Number of random stocks</h5>
+      <input autocomplete="off" value="25" class="form-control" name="random" placeholder="random" type="number" min="5" max="70">
+      <button id="random-button" type="button">Choose random stocks</button>
+    </div>
 </div>
 
+<h3>Please enter the start date</h3>
+<a>The model will be fitted for the time range that is later then one year from the end date.</a>
+<a>The portfolio results refelct excatly one year of results.</a>
+        <div class="form-group">
+            <input autocomplete="off" value="2015-01-01" class="form-control" name="start" placeholder="start" type="date">
+            <input autocomplete="off" class="form-control" name="end" placeholder="end" type="date">
+        </div>
+<h3>Select test models</h3>
+    <div>
+      <select name="test_model" class="selectpicker" style="display:none" id="myPicker" multiple>
+        <option>minimum volatility</option>
+        <option>mean variance</option>
+        <option>semi-variance</option>
+        <option>CVaR</option>
+       </select>
+    </div>
 <h3>Please select the gamma value</h3>
 <div class="form-group">
     <input autocomplete="off" value="0.1" class="form-control" name="gamma" placeholder="gamma" type="number" step=".1" min="0" max="10">
 </div>
 
-<h3>Please select the number of random stocks to choose from</h3>
-        <div class="form-group">
-            <input autocomplete="off" value="25" class="form-control" name="random" placeholder="random" type="number" min="5">
-        </div>
+<h3>Please enter your upper bounds volatility constraint</h3>
+  <div class="form-group">
+    <input autocomplete="off" value="25" class="form-control" name="volatility" placeholder="volatility" type="number" min="0">%
+  </div>
+
+<h3> Please enter target annual rate of return</h3>
+  <div class="form-group">
+   <input autocomplete="off" value="10" class="form-control" name="return" placeholder="rate of return" type="number" min="1">%
+  </div>
+
+<h3>Please enter your CVaR constraint</h3>
+  <div class="form-group">
+    <input autocomplete="off" value="2.5" class="form-control" name="cvar" placeholder="cvar" type="number" min="0">%
+  </div>
 <button onClick="this.form.submit(); this.disabled=true; this.value='Sending…'; " class="btn btn-primary" type="submit">Test</button>
 </form>
+
 <script>
 function nextY() {
   Calendar cal = Calendar.getInstance();
@@ -40,11 +72,190 @@ function nextY() {
   Date nextYear = cal.getTime();
 }
 document.querySelector("#today").valueAsDate = Date nextY();
-
 </script>
-<div align="left"; class="child"; id="plotly-timeseries"></div>
+
 <script>
-var graph = {{ plot_json | safe }};
-Plotly.plot('plotly-timeseries', graph, {});
+    $("textarea").each(function () {
+        this.setAttribute("style", "height:" + (this.scrollHeight) + "px;overflow-y:hidden;");
+
+    }).on("input", function () {
+        this.style.height = "auto";
+        this.style.height = (this.scrollHeight) + "px";
+    });
+</script>
+
+<script>
+function autocomplete(inp, arr) {
+  /*the autocomplete function takes two arguments,
+  the text field element and an array of possible autocompleted values:*/
+  var currentFocus;
+  /*execute a function when someone writes in the text field:*/
+  inp.addEventListener("input", function(e) {
+      var a, b, i, val = this.value;
+      /*close any already open lists of autocompleted values*/
+      closeAllLists();
+      if (!val) { return false;}
+      currentFocus = -1;
+      /*create a DIV element that will contain the items (values):*/
+      a = document.createElement("DIV");
+      a.setAttribute("id", this.id + "autocomplete-list");
+      a.setAttribute("class", "autocomplete-items");
+      /*append the DIV element as a child of the autocomplete container:*/
+      this.parentNode.appendChild(a);
+      /*for each item in the array...*/
+      for (i = 0; i < arr.length; i++) {
+        /*check if the item starts with the same letters as the text field value:*/
+        if (arr[i][0].substr(0, val.length).toUpperCase() == val.toUpperCase()) {
+          /*create a DIV element for each matching element:*/
+          b = document.createElement("DIV");
+          /*make the matching letters bold:*/
+          b.innerHTML = "<strong>" + arr[i][0].substr(0, val.length) + "</strong>";
+          b.innerHTML += arr[i][0].substr(val.length);
+          /*insert a input field that will hold the current array item's value:*/
+          b.innerHTML += "<input type='hidden' value='" + arr[i][1] + "'>";
+          /*execute a function when someone clicks on the item value (DIV element):*/
+          b.addEventListener("click", function(e) {
+              /*insert the value for the autocomplete text field:*/
+              document.getElementById('myTxt').focus();
+              myTxt.value += this.getElementsByTagName("input")[0].value + ('\n');
+              document.getElementById('myInput').focus();
+              inp.value = "";
+              /*close the list of autocompleted values,
+              (or any other open lists of autocompleted values:*/
+              closeAllLists();
+          });
+          a.appendChild(b);
+        }
+      }
+  });
+  /*execute a function presses a key on the keyboard:*/
+  inp.addEventListener("keydown", function(e) {
+      var x = document.getElementById(this.id + "autocomplete-list");
+      if (x) x = x.getElementsByTagName("div");
+      if (e.keyCode == 40) {
+        /*If the arrow DOWN key is pressed,
+        increase the currentFocus variable:*/
+        currentFocus++;
+        /*and and make the current item more visible:*/
+        addActive(x);
+      } else if (e.keyCode == 38) { //up
+        /*If the arrow UP key is pressed,
+        decrease the currentFocus variable:*/
+        currentFocus--;
+        /*and and make the current item more visible:*/
+        addActive(x);
+      } else if (e.keyCode == 13) {
+        /*If the ENTER key is pressed, prevent the form from being submitted,*/
+        e.preventDefault();
+        if (currentFocus > -1) {
+          /*and simulate a click on the "active" item:*/
+          if (x) x[currentFocus].click();
+        }
+      }
+  });
+  function addActive(x) {
+    /*a function to classify an item as "active":*/
+    if (!x) return false;
+    /*start by removing the "active" class on all items:*/
+    removeActive(x);
+    if (currentFocus >= x.length) currentFocus = 0;
+    if (currentFocus < 0) currentFocus = (x.length - 1);
+    /*add class "autocomplete-active":*/
+    x[currentFocus].classList.add("autocomplete-active");
+  }
+  function removeActive(x) {
+    /*a function to remove the "active" class from all autocomplete items:*/
+    for (var i = 0; i < x.length; i++) {
+      x[i].classList.remove("autocomplete-active");
+    }
+  }
+  function closeAllLists(elmnt) {
+    /*close all autocomplete lists in the document,
+    except the one passed as an argument:*/
+    var x = document.getElementsByClassName("autocomplete-items");
+    for (var i = 0; i < x.length; i++) {
+      if (elmnt != x[i] && elmnt != inp) {
+        x[i].parentNode.removeChild(x[i]);
+      }
+    }
+  }
+  /*execute a function when someone clicks in the document:*/
+  document.addEventListener("click", function (e) {
+      closeAllLists(e.target);
+  });
+}
+
+/*An array containing all the tickers names:*/
+var company_name = {{ nasdaq_exchange_info | safe }}
+
+autocomplete(document.getElementById("myInput"), company_name);
+</script>
+
+<script>
+  const textarea = document.getElementById('myTxt');
+  var company_name = {{ nasdaq_exchange_info_tickers | safe }};
+  const randomButton = document.getElementById('random-button');
+
+  randomButton.addEventListener('click', () => {
+    const randomInput = document.querySelector('input[name="random"]');
+    const numRandom = parseInt(randomInput.value, 10);  // convert input value to number
+    const randomStocks = chooseRandomStocks(numRandom, company_name);
+    textarea.value = randomStocks.join('\n');
+    const height = numRandom * 21;
+    textarea.style.height = `${height}px`;
+  });
+
+  function chooseRandomStocks(num, stocks) {
+    const randomStocks = [];
+    const textarea = document.getElementById('myTxt');
+    while (num > 0 && stocks.length > 0) {
+      const index = Math.floor(Math.random() * stocks.length);
+      const stock = stocks[index];
+      randomStocks.push(stock);
+      stocks.splice(index, 1);  // remove the chosen element from the original array
+      num--;
+    }
+    return randomStocks;  // return the array of random stocks
+  }
+</script>
+
+<script type="text/javascript">
+  const input = document.querySelector('input[name="random"]');
+  input.addEventListener('change', (event) => {
+    const value = event.target.value;
+    if (value > 70) {
+      event.preventDefault();  // prevent the default action
+      input.value = 70;  // set the value to the maximum value
+    }
+  });
+</script>
+
+<script type="text/javascript">
+  $('.dropdown-button').click(function() {
+  $('.dropdown-menu').toggle();
+});
+</script>
+
+<script>
+  $('#myPicker').on('changed.bs.select', function(e, clickedIndex, isSelected, previousValue) {
+    var selected = document.getElementById("myPicker").options[clickedIndex].value;
+    if (myChoices.indexOf(selected) == -1) {
+      myChoices.push(selected);
+    } else {
+      myChoices.splice(myChoices.indexOf(selected), 1);
+    }
+  });
+</script>
+
+<script type="text/javascript">
+  // get the current date
+  const today = new Date();
+
+  // get the input element
+  const enter = document.querySelector('input[name="end"]');
+
+  // set the value of the input element to today's date
+  enter.value = today.toISOString().substring(0, 10);
+
 </script>
 {% endblock %}
