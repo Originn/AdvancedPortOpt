@@ -361,3 +361,9 @@ input[type=button] {
 .mytabs input[type="radio"]:checked + label {
   background: #90EE90;
 }
+
+nav,
+main {
+  display: flex;
+  flex-grow: 1;
+}
