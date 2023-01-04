@@ -23,7 +23,13 @@ nav .navbar-brand .green
 }
 
 @media (max-width: 767px) {
-  nav {
+  body {
+    width: 100%;
+  }
+}
+
+@media (max-width: 767px) {
+  main {
     width: 100%;
   }
 }
