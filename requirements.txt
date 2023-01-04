@@ -70,7 +70,6 @@ pytz-deprecation-shim==0.1.0.post0
 qdldl==0.1.5.post0
 redis==4.3.4
 requests==2.27.1
-s3transfer==0.5.1
 scikit-learn==1.0.2
 scipy==1.8.0
 scs==3.2.0
