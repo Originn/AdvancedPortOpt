@@ -16,18 +16,26 @@
 <div class="autocomplete" style="width:300px;">
   <input id="myInput" type="text" name="stock" placeholder="Company Name">
 </div>
+<div style="width: 60%; float:right">
+    <input type="button" style="width: 40%; height: 40px; font-size: 13px" value="Top 50 crypto coins" onclick="enter_crypto()"/>
+    <input type="button" style="width: 40%; height: 40px; font-size: 13px" value="Top 60 world stocks" onclick="enter_world()"/>
+    <input type="button" style="width: 40%; height: 40px; font-size: 13px" value="Top 40 US stocks" onclick="enter_US()"/>
+    <input type="button" style="text-align: center; width: 40%; height: 40px; font-size: 13px" value="Top 40 mcap +10% div" onclick="enter_top_div()"/>
+    <input type="button" style="width: 40%; height: 40px; font-size: 13px" value="Finviz news signal" onclick="win_loss_signal()"/>
+    <input type="button" style="width: 40%; height: 40px; font-size: 13px" value="Finviz trend signal" onclick="win_loss_trend()"/>
+</div>
+<div style="float: right; width: calc(50% - 5px); height: 200px;">
+  <h5> Number of random stocks</h5>
+  <input autocomplete="off" value="25" class="form-control" name="random" placeholder="random" type="number" min="5" max="70">
+  <button id="random-button" type="button">Choose random stocks</button>
+</div>
 <div class="form-group">
     <textarea rows=10 id="myTxt" class="form-control" name="symbols" placeholder="symbols" type="text">{{ cached_symbols }}</textarea>
-    <div style="float: right; width: calc(50% - 5px); height: 200px;">
-      <h5> Number of random stocks</h5>
-      <input autocomplete="off" value="25" class="form-control" name="random" placeholder="random" type="number" min="5" max="70">
-      <button id="random-button" type="button">Choose random stocks</button>
-    </div>
 </div>
 
 <h3>Please enter the start date</h3>
 <a>The model will be fitted for the time range that is later then one year from the end date.</a>
-<a>The portfolio results refelct excatly one year of results.</a>
+<a>The portfolio results reflect excatly one year of results.</a>
         <div class="form-group">
             <input autocomplete="off" value="2015-01-01" class="form-control" name="start" placeholder="start" type="date">
             <input autocomplete="off" class="form-control" name="end" placeholder="end" type="date">
@@ -255,6 +263,40 @@ autocomplete(document.getElementById("myInput"), company_name);
 
   // set the value of the input element to today's date
   enter.value = today.toISOString().substring(0, 10);
+
+</script>
+
+<script type="text/javascript">
+  function enter_crypto()
+  {
+    document.getElementById("myTxt").value += {{ top_50_crypto | safe }}.join().split(",").join("\n") + "\n";
+  }
+
+  function enter_world()
+  {
+    document.getElementById("myTxt").value += {{ top_world_stocks | safe }}.join().split(",").join("\n") + "\n";
+  }
+
+  function enter_US()
+  {
+    document.getElementById("myTxt").value += {{ top_US_stocks | safe }}.join().split(",").join("\n") + "\n";
+  }
+
+
+  function win_loss_signal()
+  {
+    document.getElementById("myTxt").value += {{ win_loss_signal | safe }}.join().split(",").join("\n") + "\n";
+  }
+
+  function win_loss_trend()
+  {
+    document.getElementById("myTxt").value += {{ win_loss_trend | safe }}.join().split(",").join("\n") + "\n";
+  }
+
+  function enter_top_div()
+  {
+    document.getElementById("myTxt").value += {{ top_div | safe }}.join().split(",").join("\n") + "\n";
+  }
 
 </script>
 {% endblock %}

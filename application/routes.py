@@ -46,6 +46,7 @@ top_world_stocks = mc.get("top_world")
 top_US_stocks= mc.get("top_US")
 top_div = mc.get("top_div")
 win_loss_trend = mc.get("win_loss_trend")
+win_loss_signal= mc.get("win_loss_signal")
 
 users_stocks = [[sn, s] for sn, s in db.session.query(Stocks.shortname, Stocks.symbol)]
 nasdaq_exchange_info.extend(users_stocks)
@@ -703,7 +704,6 @@ def build():
         gamma_cached = mc.get(str(userId)+'_gamma') if mc.get(str(userId)+'_gamma') else 0
         cvar_cached = mc.get(str(userId)+'_cvar') if mc.get(str(userId)+'_cvar') else 0
         return_cached = mc.get(str(userId)+'_return') if mc.get(str(userId)+'_return') else 0
-        win_loss_signal= mc.get("win_loss_signal")
         availableCash=db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
         return render_template("build.html", availableCash=round(availableCash, 4), GBP=GBPtoUSD(), nasdaq_exchange_info=nasdaq_exchange_info, return_cached = return_cached, cvar_cached = cvar_cached, gamma_cached = gamma_cached, vol_cached = vol_cached, funds_cached = funds_cached, start_cached = start_cached, cached_symbols=cached_symbols, top_50_crypto=top_50_crypto, top_world_stocks=top_world_stocks, top_US_stocks=top_US_stocks, top_div=top_div, win_loss_signal = win_loss_signal, win_loss_trend=win_loss_trend)
 
@@ -834,6 +834,14 @@ def test():
     if request.method == "POST":
         symbols = request.form.get("symbols")
         symbols = list(set(symbols.split()))
+        sp500_prices = yf.download('^GSPC', start=datetime.strptime(request.form.get("end"), '%Y-%m-%d') - timedelta(days=365), end=request.form.get("end"), auto_adjust = False, prepost = False, threads = True, proxy = None)["Adj Close"].reset_index()
+        investment = 10000
+        values = [investment]
+        for i in range(1, len(sp500_prices)):
+            investment *= sp500_prices['Adj Close'][i] / sp500_prices['Adj Close'][i - 1]
+            values.append(investment)
+        sp500_prices['Adj Close'] = values
+        sp500_prices = sp500_prices.set_index('Date')
         try:
             df = yf.download(symbols, start=request.form.get("start"), end=request.form.get("end"), auto_adjust = False, prepost = False, threads = True, proxy = None)["Adj Close"].dropna(axis=1, how='all').sort_values('Date')
             failed=(list(shared._ERRORS.keys()))
@@ -856,6 +864,10 @@ def test():
         # Subtract one year from today's date
         today = datetime.strptime(request.form.get("end"), '%Y-%m-%d')
         one_year_ago = today - timedelta(days=365)
+        fig = px.line(sp500_prices, x=sp500_prices.index, y='Adj Close')
+        #fig = fig.update_xaxes(rangeslider_visible=True)
+        fig.update_layout(yaxis_title="Portfolio value",width=1350, height=700, title_text = 'S&P500', title_x = 0.5)
+        plot_portfolio_performance_sp500 = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
         df = df.reset_index()
         # Filter the df dataframe to only include rows with a 'Date' value that is greater than or equal to one_year_ago
         future_prices = df[df['Date'] >= one_year_ago].set_index('Date')
@@ -869,7 +881,7 @@ def test():
                 else:
                     prices = prices.drop(col, axis=1)
         selected_values = request.form.getlist('test_model')
-        results = {"models": selected_values}
+        results = {"models": selected_values, "plot_portfolio_performance_sp500": plot_portfolio_performance_sp500}
         for method in selected_values:
             if method == "minimum volatility":
                 print(prices)
@@ -909,6 +921,14 @@ def test():
                 future_prices_min=future_prices.loc[:, future_prices.columns.isin(list(alloc.keys()))]
                 #create a total value df where we can see the value of the portfolio on each day
                 portfolio_performance = future_prices_min.dot(pd.Series(alloc))+leftover
+                # Get the first date in the series
+                first_date = portfolio_performance.index[0]
+                # Calculate the date that is one day before the first date
+                previous_date = first_date - pd.Timedelta(days=1)
+                # Create a new series with a single row
+                new_row = pd.Series([10000], index=[previous_date])
+                # Append the new row to the beginning of the existing series
+                portfolio_performance = new_row.append(portfolio_performance)
                 fig = px.line(portfolio_performance, x=portfolio_performance.index, y=portfolio_performance)
                 #fig = fig.update_xaxes(rangeslider_visible=True)
                 fig.update_layout(yaxis_title="Portfolio value",width=1350, height=700, title_text = 'Minimun volatility', title_x = 0.5)
@@ -975,6 +995,14 @@ def test():
                 future_prices_mean=future_prices.loc[:, future_prices.columns.isin(list(alloc.keys()))]
                 #create a total value df where we can see the value of the portfolio on each day
                 portfolio_performance = future_prices_mean.dot(pd.Series(alloc))+leftover
+                # Get the first date in the series
+                first_date = portfolio_performance.index[0]
+                # Calculate the date that is one day before the first date
+                previous_date = first_date - pd.Timedelta(days=1)
+                # Create a new series with a single row
+                new_row = pd.Series([10000], index=[previous_date])
+                # Append the new row to the beginning of the existing series
+                portfolio_performance = new_row.append(portfolio_performance)
                 fig = px.line(portfolio_performance, x=portfolio_performance.index, y=portfolio_performance)
                 #fig = fig.update_xaxes(rangeslider_visible=True)
                 fig.update_layout(yaxis_title="Portfolio value",width=1350, height=700, title_text = 'mean variance & L2', title_x = 0.5)
@@ -1042,6 +1070,14 @@ def test():
                 future_prices_semi=future_prices.loc[:, future_prices.columns.isin(list(alloc.keys()))]
                 #create a total value df where we can see the value of the portfolio on each day
                 portfolio_performance = future_prices_semi.dot(pd.Series(alloc))+leftover
+                # Get the first date in the series
+                first_date = portfolio_performance.index[0]
+                # Calculate the date that is one day before the first date
+                previous_date = first_date - pd.Timedelta(days=1)
+                # Create a new series with a single row
+                new_row = pd.Series([10000], index=[previous_date])
+                # Append the new row to the beginning of the existing series
+                portfolio_performance = new_row.append(portfolio_performance)
                 fig = px.line(portfolio_performance, x=portfolio_performance.index, y=portfolio_performance)
                 #fig = fig.update_xaxes(rangeslider_visible=True)
                 fig.update_layout(yaxis_title="Portfolio value",width=1350, height=700, title_text = 'semi variance', title_x = 0.5)
@@ -1103,6 +1139,14 @@ def test():
                 future_prices_cvar=future_prices.loc[:, future_prices.columns.isin(list(alloc.keys()))]
                 #create a total value df where we can see the value of the portfolio on each day
                 portfolio_performance = future_prices_cvar.dot(pd.Series(alloc))+leftover
+                # Get the first date in the series
+                first_date = portfolio_performance.index[0]
+                # Calculate the date that is one day before the first date
+                previous_date = first_date - pd.Timedelta(days=1)
+                # Create a new series with a single row
+                new_row = pd.Series([10000], index=[previous_date])
+                # Append the new row to the beginning of the existing series
+                portfolio_performance = new_row.append(portfolio_performance)
                 fig = px.line(portfolio_performance, x=portfolio_performance.index, y=portfolio_performance)
                 #fig = fig.update_xaxes(rangeslider_visible=True)
                 fig.update_layout(yaxis_title="Portfolio value",width=1350, height=700, title_text = 'CVaR', title_x = 0.5)
@@ -1170,7 +1214,7 @@ def test():
         arr = np.array(nasdaq_exchange_info)
         nasdaq_exchange_info_tickers = arr[:, 1]
         nasdaq_exchange_info_tickers = nasdaq_exchange_info_tickers.tolist()
-        return render_template("test.html", nasdaq_exchange_info = nasdaq_exchange_info, nasdaq_exchange_info_tickers=nasdaq_exchange_info_tickers)
+        return render_template("test.html", win_loss_signal=win_loss_signal, win_loss_trend=win_loss_trend, top_div=top_div, top_50_crypto=top_50_crypto, top_world_stocks=top_world_stocks, top_US_stocks=top_US_stocks, nasdaq_exchange_info = nasdaq_exchange_info, nasdaq_exchange_info_tickers=nasdaq_exchange_info_tickers)
 
 
 @app.route("/dash")
