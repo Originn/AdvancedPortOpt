@@ -33,7 +33,7 @@
     <textarea rows=10 id="myTxt" class="form-control" name="symbols" placeholder="symbols" type="text">{{ cached_symbols }}</textarea>
 </div>
 
-<h3>Please enter the start date</h3>
+<h3>Enter the start date</h3>
 <a>The model will be fitted for the time range that is later then one year from the end date.</a>
 <a>The portfolio results reflect excatly one year of results.</a>
         <div class="form-group">
@@ -49,25 +49,30 @@
         <option>CVaR</option>
        </select>
     </div>
-<h3>Please select the gamma value</h3>
+<h3>Select the gamma value</h3>
 <div class="form-group">
     <input autocomplete="off" value="0.1" class="form-control" name="gamma" placeholder="gamma" type="number" step=".1" min="0" max="10">
 </div>
 
-<h3>Please enter your upper bounds volatility constraint</h3>
+<h3>Enter your upper bounds volatility constraint</h3>
   <div class="form-group">
     <input autocomplete="off" value="25" class="form-control" name="volatility" placeholder="volatility" type="number" min="0">%
   </div>
 
-<h3> Please enter target annual rate of return</h3>
+<h3>Enter target annual rate of return</h3>
   <div class="form-group">
    <input autocomplete="off" value="10" class="form-control" name="return" placeholder="rate of return" type="number" min="1">%
   </div>
 
-<h3>Please enter your CVaR constraint</h3>
+<h3>Enter your CVaR constraint</h3>
   <div class="form-group">
     <input autocomplete="off" value="2.5" class="form-control" name="cvar" placeholder="cvar" type="number" min="0">%
   </div>
+
+  <h3>Enter the short ratio for the minimum volatility long/short portfolio</h3>
+    <div class="form-group">
+      <input autocomplete="off" value="50" class="form-control" name="short_ratio" placeholder="short ratio" type="number" min="1" max="100">%
+    </div>
 <button onClick="this.form.submit(); this.disabled=true; this.value='Sending…'; " class="btn btn-primary" type="submit">Test</button>
 </form>
 
@@ -234,6 +239,16 @@ autocomplete(document.getElementById("myInput"), company_name);
       event.preventDefault();  // prevent the default action
       input.value = 70;  // set the value to the maximum value
     }
+  });
+</script>
+
+<script type="text/javascript">
+  var shortRatioInput = document.getElementsByName("short_ratio")[0];
+  shortRatioInput.addEventListener("input", function(){
+      if (this.value < 1 || this.value > 99) {
+          alert("Invalid short ratio! Please enter a value between 1 and 99.")
+          this.value = "";
+      }
   });
 </script>
 

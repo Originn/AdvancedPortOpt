@@ -17,6 +17,8 @@
       The following symbols have been removed due to low quality data: {{ listofna }}
     </div>
     <p>&nbsp;</p>
+    <h5><strong>Computed without expected returns</strong></h5>
+    <p>&nbsp;</p>
     <a>On {{ results.profit_date_min_vol }} which is {{ results.num_days_min_vol }} days from the purchase date, the portfolio was at it's maximum price {{ results.max_profit_min_vol }}, which is {{ results.max_profit_pct_min_vol }}%</a>
     <p>&nbsp;</p>
     <div id="plotly-timeseries"></div>
@@ -30,7 +32,23 @@
     graph = {{ results.plot_portfolio_performance_min_vol | safe }};
     Plotly.plot('plotly-timeseries1', graph, {});
     </script>
+
+    <p>&nbsp;</p>
+
+    <div id="plotly-timeseries2"></div>
+    <script>
+    var graph = {{ results.plot_json_dist_min_vol_short | safe }};
+    Plotly.plot('plotly-timeseries2', graph, {});
+    </script>
+
+    <div align="center"; class="child"; id="plotly-timeseries5"></div>
+    <script>
+    graph = {{ results.plot_portfolio_performance_min_vol_short | safe }};
+    Plotly.plot('plotly-timeseries5', graph, {});
+    </script>
   </div>
+
+
 {% endif %}
 
 {% if results.num_small_mean_var is defined %}

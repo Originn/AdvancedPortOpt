@@ -22,6 +22,8 @@ from dash.dependencies import Input, Output
 import yfinance as yf
 import numpy as np
 from pandas_datareader import data
+import concurrent.futures
+
 
 
 def init_dashboard(server):
@@ -241,8 +243,8 @@ def init_dashboard(server):
                       Output('indicators-ptf', 'figure'),
                       Output('chrt-portfolio-secondary', 'figure'),
                       Output('pie-top15', 'figure'),
-                      [Input('greet', 'pathname')])
-    def load_user_dash(input1):
+                      [Input('page-content', 'pathname')])
+    def load_user_dash(pathname):
         if session.get('user_name'):
             user = session.get('user_name')
         else:
@@ -485,15 +487,6 @@ def init_dashboard(server):
             portf_allvalues = MEGA_DF.filter(regex='mktvalue').fillna(0)
 
             portf_allvalues['portf_value'] = portf_allvalues.sum(axis=1) # summing all market values
-
-            # # For the S&P500 price return
-            # start_sp = today - BDay(200)
-            # #
-            # if today not in sp500.index:
-            #     new_data = pd.DataFrame(sp500[-1:].values, index=[today], columns=sp500.columns)
-            #     sp500 = pd.concat([sp500, new_data])
-            # clean_header(sp500)
-            # sp500=sp500[~sp500.index.duplicated(keep='first')]
 
             #getting the pct change
             portf_allvalues = portf_allvalues.join(sp500[['adj_close', 'open']], how='outer')

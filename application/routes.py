@@ -884,7 +884,6 @@ def test():
         results = {"models": selected_values, "plot_portfolio_performance_sp500": plot_portfolio_performance_sp500}
         for method in selected_values:
             if method == "minimum volatility":
-                print(prices)
                 S = risk_models.CovarianceShrinkage(prices).ledoit_wolf()
                 ef = EfficientFrontier(None, S)
                 try:
@@ -914,9 +913,11 @@ def test():
                         flash(error)
                         return redirect("/test")
                 alloc, leftover = da.lp_portfolio()
-                fig = px.pie(alloc.keys(), values=alloc.values(), names=alloc.keys())
+                nu = pd.Series(alloc)
+                fig = px.bar(nu, orientation='h')
+                #fig = px.pie(alloc.keys(), values=alloc.values(), names=alloc.keys())
                 fig.update_traces(textposition='inside')
-                fig.update_layout(title_text='Suggested Portfolio Allocation for min volatility (long)', title_x=0.5)
+                fig.update_layout(title_text='Suggested Portfolio Allocation for min volatility (long)', title_x=0.5, showlegend = False, yaxis_title="amount", xaxis_title="ticker")
                 plot_json_dist_min_vol_long = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
                 future_prices_min=future_prices.loc[:, future_prices.columns.isin(list(alloc.keys()))]
                 #create a total value df where we can see the value of the portfolio on each day
@@ -931,7 +932,7 @@ def test():
                 portfolio_performance = new_row.append(portfolio_performance)
                 fig = px.line(portfolio_performance, x=portfolio_performance.index, y=portfolio_performance)
                 #fig = fig.update_xaxes(rangeslider_visible=True)
-                fig.update_layout(yaxis_title="Portfolio value",width=1350, height=700, title_text = 'Minimun volatility', title_x = 0.5)
+                fig.update_layout(yaxis_title="Portfolio value",width=1350, height=700, title_text = 'Minimun volatility long', title_x = 0.5)
                 plot_portfolio_performance_min_vol = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
                 max_profit_min_vol=round(portfolio_performance.max(), 2)
                 max_profit_pct_min_vol=round((portfolio_performance.max()-10000)/100, 2)
@@ -939,7 +940,7 @@ def test():
                 profit_date = portfolio_performance.idxmax()
                 profit_date_min_vol=profit_date.strftime("%Y-%m-%d")
                 num_days_min_vol = (profit_date - portfolio_performance.index[0]).days
-                method = "minimum volatility"
+                method = "minimum volatility long"
                 end_date=request.form.get("end")
                 new_test=Test(request.form.get("start"), end_date, list(alloc.keys()), session["user_id"], profit_date, method, max_profit_value, null(), null(), num_days_min_vol)
                 db.session.add(new_test)
@@ -951,6 +952,83 @@ def test():
                                  "num_days_min_vol":num_days_min_vol,
                                  "profit_date_min_vol": profit_date_min_vol,
                                  "listofna": listofna})
+                #calulating long/short for min volatility without expected returns
+                ef = EfficientFrontier(None, S, weight_bounds=(-1, 1))
+                try:
+                    ef.min_volatility()
+                    weights = ef.clean_weights()
+                except ValueError as e:
+                    error = str(e)
+                    flash(error)
+                    return redirect("/test")
+                try:
+                    da = DiscreteAllocation(weights, latest_prices, total_portfolio_value=10000, short_ratio=float(request.form.get("short_ratio"))/100)
+                except TypeError:
+                        delisted = prices.columns[df.iloc[-1].isnull()]
+                        delisted= ", ".join(delisted)
+                        error = "Can't get latest prices for the following stock/s, please remove to contiue :" + delisted
+                        flash(error)
+                        return redirect("/test")
+                alloc, leftover = da.lp_portfolio()
+                alloc_to_graph = {k: abs(v*(1-float(request.form.get("short_ratio"))/100)) if v>0 else v for k, v in alloc.items()}
+                nu = pd.Series(alloc_to_graph)
+                fig = px.bar(nu, orientation='h')
+                fig.update_layout(title_text='Suggested Portfolio Allocation for min volatility (long/short)', title_x=0.5, showlegend = False, yaxis_title="amount", xaxis_title="ticker")
+                plot_json_dist_min_vol_short = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+                leftover=leftover*(1-float(request.form.get("short_ratio"))/100)
+                future_prices_min_long_short=future_prices.loc[:, future_prices.columns.isin(list(alloc.keys()))]
+                #extract the long positions of the portfolio
+                long_positions = {k:v*(1-float(request.form.get("short_ratio"))/100) for k,v in alloc.items() if v>0}
+                #extract the short positions of the portfolio
+                short_positions = {k:-1*v for k,v in alloc.items() if v<0}
+                #changing the negative allocations to positive for later merge and .dot operations
+                alloc = {k: abs(v*(1-float(request.form.get("short_ratio"))/100)) if v>0 else abs(v) for k, v in alloc.items()}
+                #extract the prices for the stocks with long  positions
+                long_positions_portfolio = future_prices.loc[:, future_prices.columns.isin(list(long_positions.keys()))]
+                #extract the prices for the stocks with short positions
+                short_positions_portfolio = future_prices.loc[:, future_prices.columns.isin(list(short_positions.keys()))]
+                #creating a pct_chnage column to reverse the order of the profit/loss (if the stock goes down the profit goes up)
+                short_positions_portfolio[short_positions_portfolio.columns+'_pct_change'] = short_positions_portfolio.pct_change()*-1
+                #multiplying the price with the pct_change
+                for col in short_positions_portfolio.columns:
+                    if col.endswith('_pct_change'):
+                        continue
+                    for i in range(1, len(short_positions_portfolio)):
+                        short_positions_portfolio.iloc[i, short_positions_portfolio.columns.get_loc(col)] = short_positions_portfolio.iloc[i-1, short_positions_portfolio.columns.get_loc(col)] + short_positions_portfolio.iloc[i-1, short_positions_portfolio.columns.get_loc(col)] * short_positions_portfolio.iloc[i, short_positions_portfolio.columns.get_loc(col+'_pct_change')]
+                #dropping the _pct_change columns
+                short_positions_portfolio.drop(columns=[col for col in short_positions_portfolio.columns if col.endswith("_pct_change")], inplace=True)
+                #merging the two dfs
+                portfolio_performance = pd.merge(short_positions_portfolio, long_positions_portfolio, on='Date', how='inner')
+                portfolio_performance = portfolio_performance.dot(pd.Series(alloc))+leftover
+                # Get the first date in the series
+                first_date = portfolio_performance.index[0]
+                # Calculate the date that is one day before the first date
+                previous_date = first_date - pd.Timedelta(days=1)
+                # Create a new series with a single row
+                new_row = pd.Series([10000], index=[previous_date])
+                # Append the new row to the beginning of the existing series
+                portfolio_performance = new_row.append(portfolio_performance)
+                fig = px.line(portfolio_performance, x=portfolio_performance.index, y=portfolio_performance)
+                #fig = fig.update_xaxes(rangeslider_visible=True)
+                fig.update_layout(yaxis_title="Portfolio value",width=1350, height=700, title_text = 'Minimun volatility long/short', title_x = 0.5)
+                plot_portfolio_performance_min_vol_short = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+                max_profit_min_vol_short=round(portfolio_performance.max(), 2)
+                max_profit_pct_min_vol_short=round((portfolio_performance.max()-10000)/100, 2)
+                max_profit_value=portfolio_performance.max()-10000
+                profit_date = portfolio_performance.idxmax()
+                profit_date_min_vol_short=profit_date.strftime("%Y-%m-%d")
+                num_days_min_vol_short = (profit_date - portfolio_performance.index[0]).days
+                method = "minimum volatility short"
+                end_date=request.form.get("end")
+                new_test=Test(request.form.get("start"), end_date, list(alloc.keys()), session["user_id"], profit_date, method, max_profit_value, null(), null(), num_days_min_vol)
+                db.session.add(new_test)
+                db.session.commit()
+                results.update({"plot_portfolio_performance_min_vol_short": plot_portfolio_performance_min_vol_short,
+                                "plot_json_dist_min_vol_short": plot_json_dist_min_vol_short,
+                                 "max_profit_pct_min_vol_short": max_profit_pct_min_vol_short,
+                                 "max_profit_min_vol_short": max_profit_min_vol_short,
+                                 "num_days_min_vol_short":num_days_min_vol_short,
+                                 "profit_date_min_vol_short": profit_date_min_vol_short})
             if method == "mean variance":
                 try:
                     mu = pypfopt.expected_returns.capm_return(prices)
