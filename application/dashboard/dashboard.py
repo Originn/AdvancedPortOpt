@@ -55,7 +55,6 @@ def init_dashboard(server):
     clean_header(sp500)
     sp500_empty = sp500[['adj_close', 'open']].reset_index()
     sp500_empty = sp500_empty.drop_duplicates(subset='Date', keep='first')
-    sp500_empty['sp500_diff'] = (sp500_empty['adj_close'].diff()).round(2)
     sp500_empty['daily_return'] = ((sp500_empty['adj_close']/sp500_empty['adj_close'].shift(1)) - 1).round(4)*100
 
     kpi_sp500_1d_pct = sp500_empty.tail(1).daily_return.iloc[0]
@@ -492,10 +491,7 @@ def init_dashboard(server):
             portf_allvalues = portf_allvalues.join(sp500[['adj_close', 'open']], how='outer')
             #portf_allvalues = portf_allvalues.drop_duplicates()
             portf_allvalues= portf_allvalues.rename(columns={'adj_close': 'sp500_mktvalue'})
-            portf_allvalues['ptf_value_pctch'] = (portf_allvalues['portf_value'].pct_change()*100).round(2)
             portf_allvalues['sp500_pctch'] = (portf_allvalues['sp500_mktvalue'].pct_change()*100).round(2)
-            portf_allvalues['ptf_value_diff'] = (portf_allvalues['portf_value'].diff()).round(2)
-            portf_allvalues['sp500_diff'] = (portf_allvalues['sp500_mktvalue'].diff()).round(2)
             portf_allvalues['sp500_mktvalue'].fillna(method='ffill', inplace=True)
 
             # KPI's for S&P500
@@ -508,7 +504,7 @@ def init_dashboard(server):
 
             initial_date = min_date  # do not use anything earlier than your first trade
             plotlydf_portfval = portf_allvalues[portf_allvalues.index >= initial_date]
-            plotlydf_portfval = plotlydf_portfval[['portf_value', 'sp500_mktvalue', 'ptf_value_pctch', 'sp500_pctch', 'ptf_value_diff', 'sp500_diff']].reset_index().round(2)
+            plotlydf_portfval = plotlydf_portfval[['portf_value', 'sp500_mktvalue', 'sp500_pctch']].reset_index().round(2)
             # calculating cumulative growth since initial date
             plotlydf_portfval['ptf_growth'] = (plotlydf_portfval.portf_value.pct_change()*100).round(2)
             plotlydf_portfval['sp500_growth'] = (plotlydf_portfval.sp500_mktvalue.pct_change()*100).round(2)
@@ -523,21 +519,36 @@ def init_dashboard(server):
             plotlydf_portfval = pd.merge(plotlydf_portfval, all_transactions_mod, on='date', how='left')
             plotlydf_portfval = plotlydf_portfval.drop_duplicates(subset=['date'], keep='first')
             plotlydf_portfval = plotlydf_portfval.reset_index(drop=True)
+
             #adding ptf_value_pctch_wo_purchases that will not cause division by zero
             plotlydf_portfval = plotlydf_portfval.assign(ptf_value_pctch_wo_purchases = plotlydf_portfval['portf_value'])
             plotlydf_portfval['cash_flow'] = plotlydf_portfval['cash_flow'].fillna(0).cumsum()
             plotlydf_portfval['ptf_growth_wo_purchases'] = plotlydf_portfval['portf_value'] + plotlydf_portfval['cash_flow']
+
             #only dividing when portf_value is not zero
             mask = plotlydf_portfval['portf_value'] > 0
-            plotlydf_portfval.loc[mask, 'ptf_value_pctch_wo_purchases'] = (((plotlydf_portfval.loc[mask,'ptf_growth_wo_purchases']/plotlydf_portfval.loc[mask, 'portf_value'])*100)).round(2)
+            plotlydf_portfval.loc[mask, 'ptf_value_pctch_wo_purchases'] = ((plotlydf_portfval.loc[mask,'ptf_growth_wo_purchases']/(-1*plotlydf_portfval.loc[mask, 'cash_flow'])*100)).round(2)
             plotlydf_portfval['ptf_value_pctch_wo_purchases'] = plotlydf_portfval['ptf_value_pctch_wo_purchases'].fillna(0)
+            #setting up column for portfolio daily chnage in percentage
+            plotlydf_portfval['cash_flow_diff'] = plotlydf_portfval['cash_flow'].diff()
+            plotlydf_portfval['cash_flow_diff'].iloc[0] = 0
+            plotlydf_portfval['cumulative_cash_flow_diff'] = plotlydf_portfval['cash_flow_diff'].cumsum()
+            plotlydf_portfval['adjusted_portf_value'] = plotlydf_portfval['portf_value'] + plotlydf_portfval['cumulative_cash_flow_diff']
+            plotlydf_portfval['adjusted_portf_value'].iloc[0] = plotlydf_portfval['portf_value'].iloc[0]
+            plotlydf_portfval['adjusted_portf_value_pctch'] = round(plotlydf_portfval['adjusted_portf_value'].pct_change()*100, 2)
+            #adjusting the first day of allocation for the pct_change of the portfolio
+            cash_flow_diff = abs(plotlydf_portfval.loc[1, 'cash_flow'])
+            adjusted_portf_value_pctch = round(((plotlydf_portfval.loc[1, 'adjusted_portf_value'] - cash_flow_diff) / cash_flow_diff)*100, 2)
+            plotlydf_portfval.loc[1, 'adjusted_portf_value_pctch'] = adjusted_portf_value_pctch
 
 
             if math.isnan(plotlydf_portfval.iloc[-1]['sp500_growth']) == True:
                 plotlydf_portfval = plotlydf_portfval[:-1]
 
+            if plotlydf_portfval.iloc[-1]['sp500_growth'] == 0:
+                plotlydf_portfval.iloc[-1,plotlydf_portfval.columns.get_loc('ptf_value_pctch_wo_purchases')] = 0
 
-            stocks = db.session.query(Records.symbol, func.sum(Records.number_of_shares).label('sumshares'), func.avg(Records.purchase_p).label('purchase_p')).filter_by(user_id=session["user_id"]).group_by(Records.symbol).all()
+            stocks = db.session.query(Records.symbol, func.sum(Records.number_of_shares).label('sumshares'), func.avg(Records.purchase_p).label('avg_purchase_p')).filter_by(user_id=session["user_id"]).group_by(Records.symbol).all()
 
             if not stocks:
                 stocks = []
@@ -554,31 +565,24 @@ def init_dashboard(server):
                 totalprolos = 0
                 portfolio_pct = 0
 
-
                 #building the index
+                all_data = all_data.reset_index().sort_values(by=["ticker","date"])
                 for stock in stocks:
-                    price = price_lookup(stock['symbol'])
+                    price = all_data[all_data['ticker'] == stock['symbol']].tail(1)['Adj Close'].values[0]
                     #check if the stock is listed in the UK
                     if ".L" in stock["symbol"]:
                         #if it is - convert the price from GBP to USD
                         price=GBPtoUSD()*price
-                    stock['ap'] = (stock['sumshares'] * price)/stock['sumshares']
+                    # stock['avg_purchase_p'] is the average price
                     stock['total'] = stock['sumshares'] * price
-                    stock['perc_change'] = round(((stock['ap'] - stock['purchase_p'])/stock['purchase_p'])*100, 3)
-                    stock['prolos'] = round((stock['perc_change']/100)*stock['total'], 2)
+                    stock['perc_change'] = round(((price - stock['avg_purchase_p'])/stock['avg_purchase_p'])*100, 5)
+                    stock['prolos'] = round(stock['avg_purchase_p'] - price, 5)
                     totalprolos += stock['prolos']
-                    totalPortValue += stock['sumshares'] * price
-
+                    totalPortValue += stock['total']
 
                 availableCash = cash
                 grandTotal = availableCash + totalPortValue
 
-
-                #building the portfolio pct change
-                for stock in stocks:
-                    portfolio_pct += ((stock['total']/totalPortValue)*stock['perc_change'])
-
-                portfolio_pct = round(portfolio_pct, 2)
 
             CHART_THEME = 'plotly_white'  # others include seaborn, ggplot2, plotly_dark
 
@@ -645,15 +649,13 @@ def init_dashboard(server):
             plotlydf_growth_compare = pd.merge(ptf, sp, on='timeperiod').reset_index().round(3)
             pd.set_option('display.max_columns', None)
 
-
-
             fig_growth2 = go.Figure()
             fig_growth2.layout.template = CHART_THEME
             fig_growth2.add_trace(go.Bar(
                 x=plotlydf_growth_compare.timeperiod,
-                y=plotlydf_portfval.ptf_value_pctch_wo_purchases,
+                y=plotlydf_portfval.adjusted_portf_value_pctch,
                 name='Portfolio'
-            ))
+                ))
             fig_growth2.add_trace(go.Bar(
                 x=plotlydf_growth_compare.timeperiod,
                 y=plotlydf_portfval.sp500_growth,
@@ -677,6 +679,13 @@ def init_dashboard(server):
                 xanchor="right",
                 x=1
             ))
+            last_price = None
+            for i in range(plotlydf_portfval.shape[0]-2, plotlydf_portfval.shape[0]):
+                if plotlydf_portfval.iloc[i]['ptf_value_pctch_wo_purchases'] != 0:
+                    last_price = plotlydf_portfval.iloc[i]['ptf_value_pctch_wo_purchases']
+                    break
+                else:
+                    last_price = plotlydf_portfval.iloc[i-1]['ptf_value_pctch_wo_purchases']
 
             indicators_ptf = go.Figure()
             indicators_ptf.layout.template = CHART_THEME
@@ -685,7 +694,7 @@ def init_dashboard(server):
                 value = totalprolos,
                 number = {'prefix': " $"},
                 title = {"text": "<br><span style='font-size:0.7em;color:gray'>Profit/Loss</span>"},
-                delta = {'position': "bottom", 'reference': totalprolos - portfolio_pct/100, 'relative': False, 'valueformat': ".2%"},
+                delta = {'position': "bottom", 'reference': (totalprolos - (last_price/100)), 'relative': False, 'valueformat': ".2%"},
                 domain = {'row': 0, 'column': 0}))
 
             indicators_ptf.add_trace(go.Indicator(
