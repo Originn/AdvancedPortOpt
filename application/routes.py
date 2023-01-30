@@ -24,6 +24,7 @@ import kthread
 from datetime import datetime, timedelta
 from pandas.tseries.offsets import Day
 import plotly.subplots as subplots
+import pandas_datareader.data as web
 
 yf.pdr_override()
 # Ensure responses aren't cached
@@ -66,7 +67,6 @@ def index():
         totalprolos = 0
 
     else:
-        start= time.time()
         stocks = [r._asdict() for r in stocks]
         cash = db.session.query(Users.cash).filter_by(id=session["user_id"]).first().cash
         totalPortValue = 0
@@ -74,7 +74,10 @@ def index():
 
         #building the index
         for stock in stocks:
-            price = price_lookup(stock['symbol'])
+            try:
+                price = float(web.get_quote_yahoo(stock['symbol'])['preMarketPrice'])
+            except:
+                price = price_lookup(stock['symbol'])
             stock["name"] = nasdaq_exchange_info_dict.get(stock['symbol'], stock['symbol'])
             #check if the stock is listed in the UK
             if ".L" in stock["symbol"]:
@@ -89,7 +92,6 @@ def index():
 
         availableCash = cash
         grandTotal = availableCash + totalPortValue
-        end = time.time()
 
     return render_template("/index.html",availableCash=round(availableCash, 4), stocks=stocks, totalPortValue=totalPortValue, grandTotal=grandTotal, totalprolos=totalprolos)
 

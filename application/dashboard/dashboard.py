@@ -564,6 +564,7 @@ def init_dashboard(server):
                 totalPortValue = 0
                 totalprolos = 0
                 portfolio_pct = 0
+                init_port_value = 0
 
                 #building the index
                 all_data = all_data.reset_index().sort_values(by=["ticker","date"])
@@ -576,9 +577,11 @@ def init_dashboard(server):
                     # stock['avg_purchase_p'] is the average price
                     stock['total'] = stock['sumshares'] * price
                     stock['perc_change'] = round(((price - stock['avg_purchase_p'])/stock['avg_purchase_p'])*100, 5)
-                    stock['prolos'] = round(stock['avg_purchase_p'] - price, 5)
+                    stock['prolos'] = (stock['perc_change']/100)*stock['total']
                     totalprolos += stock['prolos']
                     totalPortValue += stock['total']
+                    init_port_value += stock['avg_purchase_p']
+
 
                 availableCash = cash
                 grandTotal = availableCash + totalPortValue
@@ -687,6 +690,10 @@ def init_dashboard(server):
                 else:
                     last_price = plotlydf_portfval.iloc[i-1]['ptf_value_pctch_wo_purchases']
 
+            #claculating reference value
+            pct = 1 + (totalprolos/init_port_value)
+            reference_value = totalprolos/pct
+
             indicators_ptf = go.Figure()
             indicators_ptf.layout.template = CHART_THEME
             indicators_ptf.add_trace(go.Indicator(
@@ -694,7 +701,7 @@ def init_dashboard(server):
                 value = totalprolos,
                 number = {'prefix': " $"},
                 title = {"text": "<br><span style='font-size:0.7em;color:gray'>Profit/Loss</span>"},
-                delta = {'position': "bottom", 'reference': (totalprolos - (last_price/100)), 'relative': False, 'valueformat': ".2%"},
+                delta = {'position': "bottom", 'reference': reference_value, 'relative': True, 'valueformat': ".2%"},
                 domain = {'row': 0, 'column': 0}))
 
             indicators_ptf.add_trace(go.Indicator(
